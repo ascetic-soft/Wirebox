@@ -31,7 +31,7 @@ final class Autowirer
     public function resolve(string $className, Container $container): object
     {
         // Circular dependency check
-        if (in_array($className, $this->resolvingStack, true)) {
+        if (\in_array($className, $this->resolvingStack, true)) {
             throw new CircularDependencyException([...$this->resolvingStack, $className]);
         }
 
@@ -50,7 +50,7 @@ final class Autowirer
 
             return $instance;
         } finally {
-            array_pop($this->resolvingStack);
+            \array_pop($this->resolvingStack);
         }
     }
 
@@ -58,6 +58,7 @@ final class Autowirer
      * Resolve arguments for a method (used for setter injection / method calls).
      *
      * @param list<mixed> $providedArgs Arguments that may contain class-string values to resolve
+     *
      * @return list<mixed>
      */
     public function resolveMethodArguments(\ReflectionMethod $method, array $providedArgs, Container $container): array
@@ -69,7 +70,7 @@ final class Autowirer
             if (isset($providedArgs[$index])) {
                 $arg = $providedArgs[$index];
                 // If the argument is a class-string, try to resolve it from the container
-                if (is_string($arg) && class_exists($arg)) {
+                if (\is_string($arg) && \class_exists($arg)) {
                     $resolved[] = $container->get($arg);
                 } else {
                     $resolved[] = $arg;
@@ -115,7 +116,7 @@ final class Autowirer
                 }
                 throw new AutowireException(
                     "Parameter \"{$paramAttr->name}\" is not defined for parameter \${$param->getName()} "
-                    . "in {$param->getDeclaringClass()?->getName()}::{$param->getDeclaringFunction()->getName()}()"
+                    . "in {$param->getDeclaringClass()?->getName()}::{$param->getDeclaringFunction()->getName()}()",
                 );
             }
             return $this->castParameterValue($value, $param);
@@ -134,10 +135,12 @@ final class Autowirer
         // 4. Check for union types — try each type
         if ($type instanceof \ReflectionUnionType) {
             foreach ($type->getTypes() as $unionType) {
-                if ($unionType instanceof \ReflectionNamedType && !$unionType->isBuiltin()) {
-                    if ($container->has($unionType->getName())) {
-                        return $container->get($unionType->getName());
-                    }
+                if (
+                    $unionType instanceof \ReflectionNamedType
+                    && !$unionType->isBuiltin()
+                    && $container->has($unionType->getName())
+                ) {
+                    return $container->get($unionType->getName());
                 }
             }
         }
@@ -155,7 +158,7 @@ final class Autowirer
         $className = $param->getDeclaringClass()?->getName() ?? 'unknown';
         throw new AutowireException(
             "Cannot resolve parameter \${$param->getName()} in {$className}::{$param->getDeclaringFunction()->getName()}()"
-            . ($type instanceof \ReflectionNamedType ? " (type: {$type->getName()})" : '')
+            . ($type instanceof \ReflectionNamedType ? " (type: {$type->getName()})" : ''),
         );
     }
 
@@ -164,7 +167,7 @@ final class Autowirer
      */
     private function castParameterValue(mixed $value, \ReflectionParameter $param): mixed
     {
-        if (!is_string($value)) {
+        if (!\is_string($value)) {
             return $value;
         }
 
@@ -176,15 +179,17 @@ final class Autowirer
         return match ($type->getName()) {
             'int' => (int) $value,
             'float' => (float) $value,
-            'bool' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
-            'array' => json_decode($value, true) ?? [$value],
+            'bool' => \filter_var($value, \FILTER_VALIDATE_BOOLEAN),
+            'array' => \json_decode($value, true) ?? [$value],
             default => $value,
         };
     }
 
     /**
      * @template T of object
+     *
      * @param class-string<T> $attributeClass
+     *
      * @return T|null
      */
     private function getAttribute(\ReflectionParameter $param, string $attributeClass): ?object
@@ -198,11 +203,12 @@ final class Autowirer
 
     /**
      * @param class-string $className
+     *
      * @return \ReflectionClass<object>
      */
     private function reflect(string $className): \ReflectionClass
     {
-        if (!class_exists($className)) {
+        if (!\class_exists($className)) {
             throw new AutowireException("Class \"{$className}\" does not exist or cannot be reflected.");
         }
 

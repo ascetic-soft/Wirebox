@@ -25,11 +25,11 @@ final class DotEnvParser
      */
     public function parse(string $filePath): array
     {
-        if (!is_file($filePath) || !is_readable($filePath)) {
+        if (!\is_file($filePath) || !\is_readable($filePath)) {
             return [];
         }
 
-        $content = file_get_contents($filePath);
+        $content = \file_get_contents($filePath);
         if ($content === false) {
             return [];
         }
@@ -43,28 +43,28 @@ final class DotEnvParser
     public function parseString(string $content): array
     {
         $vars = [];
-        $lines = explode("\n", str_replace("\r\n", "\n", $content));
+        $lines = \explode("\n", \str_replace("\r\n", "\n", $content));
 
         foreach ($lines as $line) {
-            $line = trim($line);
+            $line = \trim($line);
 
             // Skip empty lines and comments
-            if ($line === '' || str_starts_with($line, '#')) {
+            if ($line === '' || \str_starts_with($line, '#')) {
                 continue;
             }
 
             // Strip optional "export " prefix
-            if (str_starts_with($line, 'export ')) {
-                $line = substr($line, 7);
+            if (\str_starts_with($line, 'export ')) {
+                $line = \substr($line, 7);
             }
 
-            $eqPos = strpos($line, '=');
+            $eqPos = \strpos($line, '=');
             if ($eqPos === false) {
                 continue;
             }
 
-            $key = trim(substr($line, 0, $eqPos));
-            $value = trim(substr($line, $eqPos + 1));
+            $key = \trim(\substr($line, 0, $eqPos));
+            $value = \trim(\substr($line, $eqPos + 1));
 
             if ($key === '') {
                 continue;
@@ -83,21 +83,21 @@ final class DotEnvParser
     private function parseValue(string $value, array $existingVars): string
     {
         // Double-quoted value: interpret escapes and variable interpolation
-        if (str_starts_with($value, '"') && str_ends_with($value, '"') && strlen($value) >= 2) {
-            $value = substr($value, 1, -1);
+        if (\str_starts_with($value, '"') && \str_ends_with($value, '"') && \strlen($value) >= 2) {
+            $value = \substr($value, 1, -1);
             $value = $this->interpolate($value, $existingVars);
-            return stripcslashes($value);
+            return \stripcslashes($value);
         }
 
         // Single-quoted value: literal, no interpolation
-        if (str_starts_with($value, "'") && str_ends_with($value, "'") && strlen($value) >= 2) {
-            return substr($value, 1, -1);
+        if (\str_starts_with($value, "'") && \str_ends_with($value, "'") && \strlen($value) >= 2) {
+            return \substr($value, 1, -1);
         }
 
         // Unquoted: strip inline comment, interpolate
-        $commentPos = strpos($value, ' #');
+        $commentPos = \strpos($value, ' #');
         if ($commentPos !== false) {
-            $value = trim(substr($value, 0, $commentPos));
+            $value = \trim(\substr($value, 0, $commentPos));
         }
 
         return $this->interpolate($value, $existingVars);
@@ -111,14 +111,10 @@ final class DotEnvParser
     private function interpolate(string $value, array $vars): string
     {
         // ${VAR} syntax
-        $value = preg_replace_callback('/\$\{([A-Za-z_][A-Za-z0-9_]*)}/', function (array $matches) use ($vars): string {
-            return $this->lookupVar($matches[1], $vars);
-        }, $value) ?? $value;
+        $value = \preg_replace_callback('/\$\{([A-Za-z_][A-Za-z0-9_]*)}/', fn (array $matches): string => $this->lookupVar($matches[1], $vars), $value) ?? $value;
 
         // $VAR syntax (not followed by {)
-        $value = preg_replace_callback('/\$([A-Za-z_][A-Za-z0-9_]*)(?![{])/', function (array $matches) use ($vars): string {
-            return $this->lookupVar($matches[1], $vars);
-        }, $value) ?? $value;
+        $value = \preg_replace_callback('/\$([A-Za-z_][A-Za-z0-9_]*)(?![{])/', fn (array $matches): string => $this->lookupVar($matches[1], $vars), $value) ?? $value;
 
         return $value;
     }
@@ -134,11 +130,11 @@ final class DotEnvParser
             return $vars[$name];
         }
 
-        if (isset($_ENV[$name]) && is_string($_ENV[$name])) {
+        if (isset($_ENV[$name]) && \is_string($_ENV[$name])) {
             return $_ENV[$name];
         }
 
-        $envValue = getenv($name);
+        $envValue = \getenv($name);
         return $envValue !== false ? $envValue : '';
     }
 }

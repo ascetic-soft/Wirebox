@@ -11,7 +11,7 @@ class CircularDependencyException extends ContainerException
      */
     public function __construct(array $chain)
     {
-        $path = implode(' -> ', $chain);
+        $path = \implode(' -> ', $chain);
         parent::__construct("Circular dependency detected: {$path}");
     }
 }

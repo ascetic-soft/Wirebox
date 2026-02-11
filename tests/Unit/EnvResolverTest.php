@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace AsceticSoft\Wirebox\Tests\Unit;
 
-use AsceticSoft\Wirebox\Env\DotEnvParser;
 use AsceticSoft\Wirebox\Env\EnvResolver;
 use PHPUnit\Framework\TestCase;
 
@@ -14,36 +13,36 @@ final class EnvResolverTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/wirebox_test_' . uniqid();
-        mkdir($this->tmpDir, 0755, true);
+        $this->tmpDir = \sys_get_temp_dir() . '/wirebox_test_' . \uniqid();
+        \mkdir($this->tmpDir, 0o755, true);
     }
 
     protected function tearDown(): void
     {
         // Clean up temp files (including dotfiles like .env)
-        $files = glob($this->tmpDir . '/{,.}*', GLOB_BRACE) ?: [];
+        $files = \glob($this->tmpDir . '/{,.}*', \GLOB_BRACE) ?: [];
         foreach ($files as $file) {
-            if (is_file($file)) {
-                unlink($file);
+            if (\is_file($file)) {
+                \unlink($file);
             }
         }
-        if (is_dir($this->tmpDir)) {
-            rmdir($this->tmpDir);
+        if (\is_dir($this->tmpDir)) {
+            \rmdir($this->tmpDir);
         }
     }
 
     public function testParseDotEnvFile(): void
     {
-        file_put_contents($this->tmpDir . '/.env', <<<'ENV'
-APP_NAME=Wirebox
-DB_HOST=localhost
-DB_PORT=5432
-# This is a comment
-APP_DEBUG=true
+        \file_put_contents($this->tmpDir . '/.env', <<<'ENV'
+            APP_NAME=Wirebox
+            DB_HOST=localhost
+            DB_PORT=5432
+            # This is a comment
+            APP_DEBUG=true
 
-QUOTED="hello world"
-SINGLE='no interpolation'
-ENV);
+            QUOTED="hello world"
+            SINGLE='no interpolation'
+            ENV);
 
         $resolver = new EnvResolver($this->tmpDir);
 
@@ -57,8 +56,8 @@ ENV);
 
     public function testDumpEnvOverridesDotEnv(): void
     {
-        file_put_contents($this->tmpDir . '/.env', "DB_HOST=from_dotenv\n");
-        file_put_contents($this->tmpDir . '/.env.local.php', "<?php\nreturn ['DB_HOST' => 'from_dump'];\n");
+        \file_put_contents($this->tmpDir . '/.env', "DB_HOST=from_dotenv\n");
+        \file_put_contents($this->tmpDir . '/.env.local.php', "<?php\nreturn ['DB_HOST' => 'from_dump'];\n");
 
         $resolver = new EnvResolver($this->tmpDir);
 
@@ -67,7 +66,7 @@ ENV);
 
     public function testResolveParameterExpression(): void
     {
-        file_put_contents($this->tmpDir . '/.env', "DB_HOST=localhost\nAPP_DEBUG=true\nPORT=8080\nRATE=1.5\n");
+        \file_put_contents($this->tmpDir . '/.env', "DB_HOST=localhost\nAPP_DEBUG=true\nPORT=8080\nRATE=1.5\n");
 
         $resolver = new EnvResolver($this->tmpDir);
 
@@ -99,7 +98,7 @@ ENV);
 
     public function testVariableInterpolation(): void
     {
-        file_put_contents($this->tmpDir . '/.env', "BASE=/opt\nPATH_FULL=\"\${BASE}/app\"\n");
+        \file_put_contents($this->tmpDir . '/.env', "BASE=/opt\nPATH_FULL=\"\${BASE}/app\"\n");
 
         $resolver = new EnvResolver($this->tmpDir);
 

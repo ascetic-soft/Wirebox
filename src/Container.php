@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace AsceticSoft\Wirebox;
 
-use AsceticSoft\Wirebox\Attribute\Exclude;
-use AsceticSoft\Wirebox\Attribute\Singleton as SingletonAttr;
-use AsceticSoft\Wirebox\Attribute\Tag as TagAttr;
 use AsceticSoft\Wirebox\Attribute\Transient as TransientAttr;
 use AsceticSoft\Wirebox\Autowire\Autowirer;
 use AsceticSoft\Wirebox\Env\EnvResolver;
@@ -82,7 +79,7 @@ class Container implements ContainerInterface
         // 4. Resolve
         if ($definition !== null) {
             $instance = $this->resolveDefinition($resolvedId, $definition);
-        } elseif (class_exists($resolvedId)) {
+        } elseif (\class_exists($resolvedId)) {
             // Auto-wire: class exists but has no explicit definition
             /** @var class-string $resolvedId */
             $instance = $this->autowireClass($resolvedId);
@@ -107,7 +104,7 @@ class Container implements ContainerInterface
         }
 
         // Can be autowired if the class exists and is instantiable
-        return class_exists($resolvedId) && (new \ReflectionClass($resolvedId))->isInstantiable();
+        return \class_exists($resolvedId) && new \ReflectionClass($resolvedId)->isInstantiable();
     }
 
     /**
@@ -120,7 +117,7 @@ class Container implements ContainerInterface
         $serviceIds = $this->tags[$tag] ?? [];
         foreach ($serviceIds as $serviceId) {
             $service = $this->get($serviceId);
-            if (!is_object($service)) {
+            if (!\is_object($service)) {
                 throw new ContainerException("Service \"{$serviceId}\" resolved to a non-object value.");
             }
             yield $service;
@@ -133,7 +130,7 @@ class Container implements ContainerInterface
      */
     public function getParameter(string $name): mixed
     {
-        if (array_key_exists($name, $this->parameters)) {
+        if (\array_key_exists($name, $this->parameters)) {
             return $this->parameters[$name];
         }
 
@@ -197,7 +194,7 @@ class Container implements ContainerInterface
             $instance = $this->autowirer->resolve($className, $this);
         }
 
-        if (!is_object($instance)) {
+        if (!\is_object($instance)) {
             throw new ContainerException("Factory for \"{$id}\" must return an object.");
         }
 

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AsceticSoft\Wirebox\Tests\Unit;
 
 use AsceticSoft\Wirebox\ContainerBuilder;
-use AsceticSoft\Wirebox\Tests\Fixtures\DatabaseLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\ExcludedService;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\LoggerInterface;
@@ -22,20 +21,20 @@ final class ContainerBuilderTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/wirebox_builder_test_' . uniqid();
-        mkdir($this->tmpDir, 0755, true);
+        $this->tmpDir = \sys_get_temp_dir() . '/wirebox_builder_test_' . \uniqid();
+        \mkdir($this->tmpDir, 0o755, true);
     }
 
     protected function tearDown(): void
     {
-        $files = glob($this->tmpDir . '/{,.}*', GLOB_BRACE) ?: [];
+        $files = \glob($this->tmpDir . '/{,.}*', \GLOB_BRACE) ?: [];
         foreach ($files as $file) {
-            if (is_file($file)) {
-                unlink($file);
+            if (\is_file($file)) {
+                \unlink($file);
             }
         }
-        if (is_dir($this->tmpDir)) {
-            rmdir($this->tmpDir);
+        if (\is_dir($this->tmpDir)) {
+            \rmdir($this->tmpDir);
         }
     }
 
@@ -81,7 +80,7 @@ final class ContainerBuilderTest extends TestCase
 
         $container = $builder->build();
 
-        $loggers = iterator_to_array($container->getTagged('logger'));
+        $loggers = \iterator_to_array($container->getTagged('logger'));
 
         self::assertNotEmpty($loggers);
     }
@@ -115,7 +114,7 @@ final class ContainerBuilderTest extends TestCase
     public function testRegisterWithFactory(): void
     {
         $builder = new ContainerBuilder($this->tmpDir);
-        $builder->register(SimpleService::class, fn() => new SimpleService());
+        $builder->register(SimpleService::class, fn () => new SimpleService());
 
         $container = $builder->build();
 
@@ -124,7 +123,7 @@ final class ContainerBuilderTest extends TestCase
 
     public function testParameterWithEnvExpression(): void
     {
-        file_put_contents($this->tmpDir . '/.env', "DB_HOST=myhost\n");
+        \file_put_contents($this->tmpDir . '/.env', "DB_HOST=myhost\n");
 
         $builder = new ContainerBuilder($this->tmpDir);
         $builder->parameter('db.host', '%env(DB_HOST)%');
@@ -136,7 +135,7 @@ final class ContainerBuilderTest extends TestCase
 
     public function testParameterWithCasting(): void
     {
-        file_put_contents($this->tmpDir . '/.env', "PORT=3306\nDEBUG=true\n");
+        \file_put_contents($this->tmpDir . '/.env', "PORT=3306\nDEBUG=true\n");
 
         $builder = new ContainerBuilder($this->tmpDir);
         $builder->parameter('port', '%env(int:PORT)%');
@@ -150,7 +149,7 @@ final class ContainerBuilderTest extends TestCase
 
     public function testFullIntegrationWithScanAndParams(): void
     {
-        file_put_contents($this->tmpDir . '/.env', "DB_HOST=testhost\nAPP_DEBUG=false\n");
+        \file_put_contents($this->tmpDir . '/.env', "DB_HOST=testhost\nAPP_DEBUG=false\n");
 
         $builder = new ContainerBuilder($this->tmpDir);
         $builder->scan(__DIR__ . '/../Fixtures');

@@ -17,20 +17,20 @@ final class CompilerTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->tmpDir = sys_get_temp_dir() . '/wirebox_compiler_test_' . uniqid();
-        mkdir($this->tmpDir, 0755, true);
+        $this->tmpDir = \sys_get_temp_dir() . '/wirebox_compiler_test_' . \uniqid();
+        \mkdir($this->tmpDir, 0o755, true);
     }
 
     protected function tearDown(): void
     {
-        $files = glob($this->tmpDir . '/*') ?: [];
+        $files = \glob($this->tmpDir . '/*') ?: [];
         foreach ($files as $file) {
-            if (is_file($file)) {
-                unlink($file);
+            if (\is_file($file)) {
+                \unlink($file);
             }
         }
-        if (is_dir($this->tmpDir)) {
-            rmdir($this->tmpDir);
+        if (\is_dir($this->tmpDir)) {
+            \rmdir($this->tmpDir);
         }
     }
 
@@ -52,7 +52,7 @@ final class CompilerTest extends TestCase
 
         self::assertFileExists($outputPath);
 
-        $content = file_get_contents($outputPath);
+        $content = \file_get_contents($outputPath);
         self::assertStringContainsString('class TestContainer', $content);
         self::assertStringContainsString('declare(strict_types=1)', $content);
         self::assertStringContainsString('CompiledContainer', $content);
@@ -62,7 +62,7 @@ final class CompilerTest extends TestCase
     {
         $compiler = new ContainerCompiler();
         $outputPath = $this->tmpDir . '/TestResolvable.php';
-        $uniqueClass = 'TestResolvable_' . uniqid();
+        $uniqueClass = 'TestResolvable_' . \uniqid();
 
         $compiler->compile(
             definitions: [
@@ -97,7 +97,7 @@ final class CompilerTest extends TestCase
         self::assertSame('localhost', $container->getParameter('db.host'));
 
         // Tags
-        $loggers = iterator_to_array($container->getTagged('logger'));
+        $loggers = \iterator_to_array($container->getTagged('logger'));
         self::assertCount(1, $loggers);
         self::assertInstanceOf(FileLogger::class, $loggers[0]);
 
@@ -123,7 +123,7 @@ final class CompilerTest extends TestCase
             namespace: 'App\\Container',
         );
 
-        $content = file_get_contents($outputPath);
+        $content = \file_get_contents($outputPath);
         self::assertStringContainsString('namespace App\\Container;', $content);
     }
 }

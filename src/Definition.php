@@ -53,7 +53,7 @@ final class Definition
     public function tag(string ...$tags): self
     {
         foreach ($tags as $tag) {
-            if (!in_array($tag, $this->tags, true)) {
+            if (!\in_array($tag, $this->tags, true)) {
                 $this->tags[] = $tag;
             }
         }
@@ -67,7 +67,7 @@ final class Definition
      */
     public function call(string $method, array $arguments = []): self
     {
-        $this->methodCalls[] = ['method' => $method, 'arguments' => $arguments];
+        $this->methodCalls[] = compact('method', 'arguments');
         return $this;
     }
 
@@ -80,9 +80,6 @@ final class Definition
         return $this;
     }
 
-    /**
-     * @param (\Closure(Container): mixed) $factory
-     */
     public function setFactory(\Closure $factory): self
     {
         $this->factory = $factory;

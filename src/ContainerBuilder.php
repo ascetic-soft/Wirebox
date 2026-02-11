@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AsceticSoft\Wirebox;
 
 use AsceticSoft\Wirebox\Attribute\Exclude;
-use AsceticSoft\Wirebox\Attribute\Singleton as SingletonAttr;
 use AsceticSoft\Wirebox\Attribute\Tag as TagAttr;
 use AsceticSoft\Wirebox\Attribute\Transient as TransientAttr;
 use AsceticSoft\Wirebox\Compiler\ContainerCompiler;
@@ -30,6 +29,7 @@ final class ContainerBuilder
     private array $excludePatterns = [];
 
     private readonly ClassScanner $scanner;
+
     private readonly EnvResolver $envResolver;
 
     public function __construct(
@@ -54,7 +54,7 @@ final class ContainerBuilder
             }
 
             // Check for #[Exclude] attribute
-            if (!class_exists($className)) {
+            if (!\class_exists($className)) {
                 continue;
             }
             $ref = new \ReflectionClass($className);

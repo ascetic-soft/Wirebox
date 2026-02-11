@@ -13,6 +13,6 @@ class TransientService
 
     public function __construct()
     {
-        $this->id = uniqid('', true);
+        $this->id = \uniqid('', true);
     }
 }

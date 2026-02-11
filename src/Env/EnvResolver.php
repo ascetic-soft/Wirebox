@@ -56,19 +56,19 @@ final class EnvResolver
      */
     public function resolveParameter(mixed $value): mixed
     {
-        if (!is_string($value)) {
+        if (!\is_string($value)) {
             return $value;
         }
 
         // Full match: the entire value is %env(...)%
-        if (preg_match('/^%env\(([^)]+)\)%$/', $value, $matches)) {
+        if (\preg_match('/^%env\(([^)]+)\)%$/', $value, $matches)) {
             return $this->resolveEnvExpression($matches[1]);
         }
 
         // Partial match: %env(...)% embedded in a larger string
-        return preg_replace_callback('/%env\(([^)]+)\)%/', function (array $matches): string {
+        return \preg_replace_callback('/%env\(([^)]+)\)%/', function (array $matches): string {
             $resolved = $this->resolveEnvExpression($matches[1]);
-            return is_string($resolved) ? $resolved : (string) var_export($resolved, true);
+            return \is_string($resolved) ? $resolved : (string) \var_export($resolved, true);
         }, $value) ?? $value;
     }
 
@@ -77,14 +77,14 @@ final class EnvResolver
         $this->ensureLoaded();
 
         // Check for type casting: "type:VAR_NAME"
-        if (str_contains($expression, ':')) {
-            [$type, $name] = explode(':', $expression, 2);
+        if (\str_contains($expression, ':')) {
+            [$type, $name] = \explode(':', $expression, 2);
             $raw = $this->resolved[$name] ?? throw new \RuntimeException(
-                "Environment variable \"{$name}\" is not defined."
+                "Environment variable \"{$name}\" is not defined.",
             );
 
             return match ($type) {
-                'bool' => filter_var($raw, FILTER_VALIDATE_BOOLEAN),
+                'bool' => \filter_var($raw, \FILTER_VALIDATE_BOOLEAN),
                 'int' => (int) $raw,
                 'float' => (float) $raw,
                 'string' => $raw,
@@ -93,7 +93,7 @@ final class EnvResolver
         }
 
         return $this->resolved[$expression] ?? throw new \RuntimeException(
-            "Environment variable \"{$expression}\" is not defined."
+            "Environment variable \"{$expression}\" is not defined.",
         );
     }
 
@@ -107,7 +107,7 @@ final class EnvResolver
 
         // Level 3 (lowest priority): .env file
         $dotEnvPath = $this->projectDir . '/.env';
-        if (is_file($dotEnvPath)) {
+        if (\is_file($dotEnvPath)) {
             $this->resolved = $this->parser->parse($dotEnvPath);
         }
 
@@ -125,27 +125,27 @@ final class EnvResolver
 
         // Level 1 (highest priority): .env.local.php (composer dump-env)
         $dumpEnvPath = $this->projectDir . '/.env.local.php';
-        if (is_file($dumpEnvPath)) {
+        if (\is_file($dumpEnvPath)) {
             /** @var mixed $dumpedVars */
             $dumpedVars = require $dumpEnvPath;
-            if (is_array($dumpedVars)) {
+            if (\is_array($dumpedVars)) {
                 /** @var array<string, string> $dumpedVars */
-                $this->resolved = array_merge($this->resolved, $dumpedVars);
+                $this->resolved = \array_merge($this->resolved, $dumpedVars);
             }
         }
     }
 
     private function getSystemEnv(string $name): ?string
     {
-        if (isset($_ENV[$name]) && is_scalar($_ENV[$name])) {
+        if (isset($_ENV[$name]) && \is_scalar($_ENV[$name])) {
             return (string) $_ENV[$name];
         }
 
-        if (isset($_SERVER[$name]) && is_scalar($_SERVER[$name]) && !str_starts_with($name, 'HTTP_')) {
+        if (isset($_SERVER[$name]) && \is_scalar($_SERVER[$name]) && !\str_starts_with($name, 'HTTP_')) {
             return (string) $_SERVER[$name];
         }
 
-        $value = getenv($name);
+        $value = \getenv($name);
         return $value !== false ? $value : null;
     }
 }

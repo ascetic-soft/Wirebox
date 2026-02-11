@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace AsceticSoft\Wirebox\Compiler;
 
 use AsceticSoft\Wirebox\Definition;
-use AsceticSoft\Wirebox\Lifetime;
 
 /**
  * Compiles container definitions into a PHP class file.
@@ -39,7 +38,7 @@ final class ContainerCompiler
             }
 
             $targetClass = $definition->getClassName() ?? $id;
-            if (!class_exists($targetClass)) {
+            if (!\class_exists($targetClass)) {
                 continue;
             }
 
@@ -64,18 +63,20 @@ final class ContainerCompiler
             $tags,
         );
 
-        $dir = dirname($outputPath);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        $dir = \dirname($outputPath);
+        if (!\is_dir($dir)) {
+            if (!mkdir($dir, 0o755, true) && !is_dir($dir)) {
+                throw new \RuntimeException(\sprintf('Directory "%s" was not created', $dir));
+            }
         }
 
-        file_put_contents($outputPath, $code);
+        \file_put_contents($outputPath, $code);
     }
 
     private function generateMethodName(string $id): string
     {
         // Convert FQCN to a valid method name
-        return 'get' . str_replace(['\\', '.', '-'], '_', $id);
+        return 'get' . \str_replace(['\\', '.', '-'], '_', $id);
     }
 
     /**
@@ -94,8 +95,8 @@ final class ContainerCompiler
         $lines[] = '    {';
 
         if ($isSingleton) {
-            $lines[] = '        if (isset($this->instances[' . var_export($id, true) . '])) {';
-            $lines[] = '            return $this->instances[' . var_export($id, true) . '];';
+            $lines[] = '        if (isset($this->instances[' . \var_export($id, true) . '])) {';
+            $lines[] = '            return $this->instances[' . \var_export($id, true) . '];';
             $lines[] = '        }';
             $lines[] = '';
         }
@@ -112,7 +113,7 @@ final class ContainerCompiler
                 foreach ($constructor->getParameters() as $param) {
                     $args[] = $this->generateParameterResolution($param);
                 }
-                $argsCode = implode(",\n            ", $args);
+                $argsCode = \implode(",\n            ", $args);
                 $lines[] = "        \$instance = new \\{$targetClass}(";
                 $lines[] = "            {$argsCode},";
                 $lines[] = '        );';
@@ -125,26 +126,26 @@ final class ContainerCompiler
         foreach ($definition->getMethodCalls() as $call) {
             $callArgs = [];
             foreach ($call['arguments'] as $arg) {
-                if (is_string($arg) && class_exists($arg)) {
-                    $callArgs[] = '$this->get(' . var_export($arg, true) . ')';
+                if (\is_string($arg) && \class_exists($arg)) {
+                    $callArgs[] = '$this->get(' . \var_export($arg, true) . ')';
                 } else {
-                    $callArgs[] = var_export($arg, true);
+                    $callArgs[] = \var_export($arg, true);
                 }
             }
-            $callArgsStr = implode(', ', $callArgs);
+            $callArgsStr = \implode(', ', $callArgs);
             $lines[] = "        \$instance->{$call['method']}({$callArgsStr});";
         }
 
         if ($isSingleton) {
             $lines[] = '';
-            $lines[] = '        $this->instances[' . var_export($id, true) . '] = $instance;';
+            $lines[] = '        $this->instances[' . \var_export($id, true) . '] = $instance;';
         }
 
         $lines[] = '';
         $lines[] = '        return $instance;';
         $lines[] = '    }';
 
-        return implode("\n", $lines);
+        return \implode("\n", $lines);
     }
 
     private function generateParameterResolution(\ReflectionParameter $param): string
@@ -155,24 +156,24 @@ final class ContainerCompiler
         $injectAttrs = $param->getAttributes(\AsceticSoft\Wirebox\Attribute\Inject::class);
         if ($injectAttrs !== []) {
             $inject = $injectAttrs[0]->newInstance();
-            return '$this->get(' . var_export($inject->id, true) . ')';
+            return '$this->get(' . \var_export($inject->id, true) . ')';
         }
 
         // Check for #[Param] attribute
         $paramAttrs = $param->getAttributes(\AsceticSoft\Wirebox\Attribute\Param::class);
         if ($paramAttrs !== []) {
             $paramAttr = $paramAttrs[0]->newInstance();
-            return '$this->getParameter(' . var_export($paramAttr->name, true) . ')';
+            return '$this->getParameter(' . \var_export($paramAttr->name, true) . ')';
         }
 
         // Type-hinted service
         if ($type instanceof \ReflectionNamedType && !$type->isBuiltin()) {
-            return '$this->get(' . var_export($type->getName(), true) . ')';
+            return '$this->get(' . \var_export($type->getName(), true) . ')';
         }
 
         // Default value
         if ($param->isDefaultValueAvailable()) {
-            return var_export($param->getDefaultValue(), true);
+            return \var_export($param->getDefaultValue(), true);
         }
 
         // Nullable
@@ -239,7 +240,7 @@ final class ContainerCompiler
         $lines[] = '}';
         $lines[] = '';
 
-        return implode("\n", $lines);
+        return \implode("\n", $lines);
     }
 
     /**
@@ -253,21 +254,21 @@ final class ContainerCompiler
             return '[]';
         }
 
-        $indent = str_repeat('    ', $indentLevel);
-        $innerIndent = str_repeat('    ', $indentLevel + 1);
+        $indent = \str_repeat('    ', $indentLevel);
+        $innerIndent = \str_repeat('    ', $indentLevel + 1);
 
         $lines = ['['];
         foreach ($data as $key => $value) {
-            $keyStr = var_export($key, true);
-            if (is_array($value)) {
+            $keyStr = \var_export($key, true);
+            if (\is_array($value)) {
                 $valueStr = $this->exportArray($value, $indentLevel + 1);
             } else {
-                $valueStr = var_export($value, true);
+                $valueStr = \var_export($value, true);
             }
             $lines[] = "{$innerIndent}{$keyStr} => {$valueStr},";
         }
         $lines[] = "{$indent}]";
 
-        return implode("\n", $lines);
+        return \implode("\n", $lines);
     }
 }

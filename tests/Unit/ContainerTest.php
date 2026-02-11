@@ -7,7 +7,6 @@ namespace AsceticSoft\Wirebox\Tests\Unit;
 use AsceticSoft\Wirebox\Container;
 use AsceticSoft\Wirebox\Definition;
 use AsceticSoft\Wirebox\Exception\NotFoundException;
-use AsceticSoft\Wirebox\Lifetime;
 use AsceticSoft\Wirebox\Tests\Fixtures\DatabaseLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\LoggerInterface;
@@ -46,7 +45,7 @@ final class ContainerTest extends TestCase
 
     public function testTransientCreatesNewInstances(): void
     {
-        $definition = (new Definition(className: SimpleService::class))->transient();
+        $definition = new Definition(className: SimpleService::class)->transient();
         $container = new Container(
             definitions: [SimpleService::class => $definition],
         );
@@ -73,7 +72,7 @@ final class ContainerTest extends TestCase
     public function testFactoryDefinition(): void
     {
         $definition = new Definition(
-            factory: fn(Container $c) => new SimpleService(),
+            factory: fn (Container $c) => new SimpleService(),
         );
         $container = new Container(
             definitions: [SimpleService::class => $definition],
@@ -87,7 +86,7 @@ final class ContainerTest extends TestCase
     public function testMethodCallsSetterInjection(): void
     {
         $loggerDef = new Definition(className: FileLogger::class);
-        $setterDef = (new Definition(className: ServiceWithSetter::class))
+        $setterDef = new Definition(className: ServiceWithSetter::class)
             ->call('setLogger', [FileLogger::class]);
 
         $container = new Container(
@@ -155,8 +154,8 @@ final class ContainerTest extends TestCase
 
     public function testGetTagged(): void
     {
-        $fileLoggerDef = (new Definition(className: FileLogger::class))->tag('logger');
-        $dbLoggerDef = (new Definition(className: DatabaseLogger::class))->tag('logger');
+        $fileLoggerDef = new Definition(className: FileLogger::class)->tag('logger');
+        $dbLoggerDef = new Definition(className: DatabaseLogger::class)->tag('logger');
 
         $container = new Container(
             definitions: [
@@ -166,7 +165,7 @@ final class ContainerTest extends TestCase
             tags: ['logger' => [FileLogger::class, DatabaseLogger::class]],
         );
 
-        $loggers = iterator_to_array($container->getTagged('logger'));
+        $loggers = \iterator_to_array($container->getTagged('logger'));
 
         self::assertCount(2, $loggers);
         self::assertInstanceOf(FileLogger::class, $loggers[0]);
