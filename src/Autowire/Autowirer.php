@@ -198,14 +198,15 @@ final class Autowirer
 
     /**
      * @param class-string $className
+     * @return \ReflectionClass<object>
      */
     private function reflect(string $className): \ReflectionClass
     {
-        try {
-            $reflection = new \ReflectionClass($className);
-        } catch (\ReflectionException $e) {
-            throw new AutowireException("Class \"{$className}\" does not exist or cannot be reflected.", 0, $e);
+        if (!class_exists($className)) {
+            throw new AutowireException("Class \"{$className}\" does not exist or cannot be reflected.");
         }
+
+        $reflection = new \ReflectionClass($className);
 
         if (!$reflection->isInstantiable()) {
             throw new AutowireException("Class \"{$className}\" is not instantiable (abstract or interface).");

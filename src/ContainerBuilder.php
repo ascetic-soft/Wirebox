@@ -54,11 +54,10 @@ final class ContainerBuilder
             }
 
             // Check for #[Exclude] attribute
-            try {
-                $ref = new \ReflectionClass($className);
-            } catch (\ReflectionException) {
+            if (!class_exists($className)) {
                 continue;
             }
+            $ref = new \ReflectionClass($className);
 
             if ($ref->getAttributes(Exclude::class) !== []) {
                 continue;

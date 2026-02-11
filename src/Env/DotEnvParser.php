@@ -112,14 +112,33 @@ final class DotEnvParser
     {
         // ${VAR} syntax
         $value = preg_replace_callback('/\$\{([A-Za-z_][A-Za-z0-9_]*)}/', function (array $matches) use ($vars): string {
-            return $vars[$matches[1]] ?? $_ENV[$matches[1]] ?? getenv($matches[1]) ?: '';
+            return $this->lookupVar($matches[1], $vars);
         }, $value) ?? $value;
 
         // $VAR syntax (not followed by {)
         $value = preg_replace_callback('/\$([A-Za-z_][A-Za-z0-9_]*)(?![{])/', function (array $matches) use ($vars): string {
-            return $vars[$matches[1]] ?? $_ENV[$matches[1]] ?? getenv($matches[1]) ?: '';
+            return $this->lookupVar($matches[1], $vars);
         }, $value) ?? $value;
 
         return $value;
+    }
+
+    /**
+     * Look up a variable by name: local vars -> $_ENV -> getenv().
+     *
+     * @param array<string, string> $vars
+     */
+    private function lookupVar(string $name, array $vars): string
+    {
+        if (isset($vars[$name])) {
+            return $vars[$name];
+        }
+
+        if (isset($_ENV[$name]) && is_string($_ENV[$name])) {
+            return $_ENV[$name];
+        }
+
+        $envValue = getenv($name);
+        return $envValue !== false ? $envValue : '';
     }
 }

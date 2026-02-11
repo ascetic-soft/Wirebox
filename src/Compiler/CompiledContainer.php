@@ -71,7 +71,11 @@ abstract class CompiledContainer implements ContainerInterface
     {
         $serviceIds = $this->tags[$tag] ?? [];
         foreach ($serviceIds as $serviceId) {
-            yield $this->get($serviceId);
+            $service = $this->get($serviceId);
+            if (!is_object($service)) {
+                throw new NotFoundException("Service \"{$serviceId}\" resolved to a non-object value.");
+            }
+            yield $service;
         }
     }
 

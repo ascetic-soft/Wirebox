@@ -68,7 +68,7 @@ final class EnvResolver
         // Partial match: %env(...)% embedded in a larger string
         return preg_replace_callback('/%env\(([^)]+)\)%/', function (array $matches): string {
             $resolved = $this->resolveEnvExpression($matches[1]);
-            return (string) $resolved;
+            return is_string($resolved) ? $resolved : (string) var_export($resolved, true);
         }, $value) ?? $value;
     }
 
@@ -126,9 +126,10 @@ final class EnvResolver
         // Level 1 (highest priority): .env.local.php (composer dump-env)
         $dumpEnvPath = $this->projectDir . '/.env.local.php';
         if (is_file($dumpEnvPath)) {
-            /** @var array<string, string> $dumpedVars */
+            /** @var mixed $dumpedVars */
             $dumpedVars = require $dumpEnvPath;
             if (is_array($dumpedVars)) {
+                /** @var array<string, string> $dumpedVars */
                 $this->resolved = array_merge($this->resolved, $dumpedVars);
             }
         }
@@ -136,11 +137,11 @@ final class EnvResolver
 
     private function getSystemEnv(string $name): ?string
     {
-        if (isset($_ENV[$name])) {
+        if (isset($_ENV[$name]) && is_scalar($_ENV[$name])) {
             return (string) $_ENV[$name];
         }
 
-        if (isset($_SERVER[$name]) && !str_starts_with($name, 'HTTP_')) {
+        if (isset($_SERVER[$name]) && is_scalar($_SERVER[$name]) && !str_starts_with($name, 'HTTP_')) {
             return (string) $_SERVER[$name];
         }
 

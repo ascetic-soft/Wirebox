@@ -124,6 +124,8 @@ final class ClassScanner
 
     /**
      * Parse namespace from tokens, advance $i past the namespace declaration.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      */
     private function parseNamespace(array $tokens, int &$i, int $count): string
     {
@@ -148,6 +150,8 @@ final class ClassScanner
 
     /**
      * Parse class name after T_CLASS token.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      */
     private function parseClassName(array $tokens, int &$i, int $count): ?string
     {
@@ -176,6 +180,8 @@ final class ClassScanner
 
     /**
      * Skip tokens until we find ; or { (to skip interface/trait/abstract class declarations).
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      */
     private function skipToNextSemicolonOrBrace(array $tokens, int &$i, int $count): void
     {
@@ -191,6 +197,8 @@ final class ClassScanner
 
     /**
      * Find the previous meaningful (non-whitespace, non-comment) token.
+     *
+     * @param list<array{0: int, 1: string, 2: int}|string> $tokens
      */
     private function previousMeaningfulToken(array $tokens, int $index): mixed
     {
@@ -206,6 +214,8 @@ final class ClassScanner
 
     /**
      * Check if a file path matches any of the exclude patterns.
+     *
+     * @param list<string> $excludePatterns
      */
     private function isExcluded(string $filePath, string $baseDir, array $excludePatterns): bool
     {

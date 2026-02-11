@@ -244,6 +244,8 @@ final class ContainerCompiler
 
     /**
      * Export an array as formatted PHP code.
+     *
+     * @param array<string|int, mixed> $data
      */
     private function exportArray(array $data, int $indentLevel): string
     {

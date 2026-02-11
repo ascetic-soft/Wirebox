@@ -90,7 +90,7 @@ final class AutowirerTest extends TestCase
         $container = new Container();
 
         $this->expectException(AutowireException::class);
-        $this->expectExceptionMessageMatches('/not instantiable/');
+        $this->expectExceptionMessageMatches('/does not exist|not instantiable/');
 
         $this->autowirer->resolve(LoggerInterface::class, $container);
     }

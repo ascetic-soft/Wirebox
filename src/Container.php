@@ -84,6 +84,7 @@ class Container implements ContainerInterface
             $instance = $this->resolveDefinition($resolvedId, $definition);
         } elseif (class_exists($resolvedId)) {
             // Auto-wire: class exists but has no explicit definition
+            /** @var class-string $resolvedId */
             $instance = $this->autowireClass($resolvedId);
         } else {
             throw new NotFoundException("Service \"{$id}\" is not registered and cannot be auto-wired.");
@@ -118,7 +119,11 @@ class Container implements ContainerInterface
     {
         $serviceIds = $this->tags[$tag] ?? [];
         foreach ($serviceIds as $serviceId) {
-            yield $this->get($serviceId);
+            $service = $this->get($serviceId);
+            if (!is_object($service)) {
+                throw new ContainerException("Service \"{$serviceId}\" resolved to a non-object value.");
+            }
+            yield $service;
         }
     }
 
@@ -188,6 +193,7 @@ class Container implements ContainerInterface
             $instance = $factory($this);
         } else {
             $className = $definition->getClassName() ?? $id;
+            /** @var class-string $className */
             $instance = $this->autowirer->resolve($className, $this);
         }
 
@@ -213,6 +219,8 @@ class Container implements ContainerInterface
     /**
      * Auto-wire a class that has no explicit definition.
      * Reads class attributes to determine lifetime.
+     *
+     * @param class-string $className
      */
     private function autowireClass(string $className): object
     {
