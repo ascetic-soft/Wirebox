@@ -15,4 +15,5 @@
             <directory>src</directory>
         </include>
     </source>
+    <coverage/>
 </phpunit>
