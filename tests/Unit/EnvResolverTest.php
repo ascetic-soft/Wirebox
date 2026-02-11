@@ -104,4 +104,122 @@ final class EnvResolverTest extends TestCase
 
         self::assertSame('/opt/app', $resolver->get('PATH_FULL'));
     }
+
+    public function testAllReturnsAllResolvedVars(): void
+    {
+        \file_put_contents($this->tmpDir . '/.env', "KEY1=val1\nKEY2=val2\n");
+
+        $resolver = new EnvResolver($this->tmpDir);
+
+        $all = $resolver->all();
+        self::assertArrayHasKey('KEY1', $all);
+        self::assertArrayHasKey('KEY2', $all);
+        self::assertSame('val1', $all['KEY1']);
+        self::assertSame('val2', $all['KEY2']);
+    }
+
+    public function testResolveParameterNonStringPassesThrough(): void
+    {
+        $resolver = new EnvResolver($this->tmpDir);
+
+        self::assertSame(42, $resolver->resolveParameter(42));
+        self::assertSame(3.14, $resolver->resolveParameter(3.14));
+        self::assertTrue($resolver->resolveParameter(true));
+        self::assertNull($resolver->resolveParameter(null));
+        self::assertSame(['a', 'b'], $resolver->resolveParameter(['a', 'b']));
+    }
+
+    public function testResolveParameterStringCast(): void
+    {
+        \file_put_contents($this->tmpDir . '/.env', "MY_VAR=hello\n");
+
+        $resolver = new EnvResolver($this->tmpDir);
+
+        self::assertSame('hello', $resolver->resolveParameter('%env(string:MY_VAR)%'));
+    }
+
+    public function testResolveParameterUndefinedVarThrows(): void
+    {
+        $resolver = new EnvResolver($this->tmpDir);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/not defined/');
+
+        $resolver->resolveParameter('%env(UNDEFINED_VAR)%');
+    }
+
+    public function testResolveParameterUndefinedCastVarThrows(): void
+    {
+        $resolver = new EnvResolver($this->tmpDir);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/not defined/');
+
+        $resolver->resolveParameter('%env(int:UNDEFINED_VAR)%');
+    }
+
+    public function testResolveParameterUnknownCastTypeThrows(): void
+    {
+        \file_put_contents($this->tmpDir . '/.env', "MY_VAR=value\n");
+
+        $resolver = new EnvResolver($this->tmpDir);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/Unknown env cast type/');
+
+        $resolver->resolveParameter('%env(invalid:MY_VAR)%');
+    }
+
+    public function testResolveParameterFloatCast(): void
+    {
+        \file_put_contents($this->tmpDir . '/.env', "RATE=3.14\n");
+
+        $resolver = new EnvResolver($this->tmpDir);
+
+        self::assertSame(3.14, $resolver->resolveParameter('%env(float:RATE)%'));
+    }
+
+    public function testResolveParameterEmbeddedCastInString(): void
+    {
+        \file_put_contents($this->tmpDir . '/.env', "HOST=localhost\nPORT=3306\n");
+
+        $resolver = new EnvResolver($this->tmpDir);
+
+        $result = $resolver->resolveParameter('mysql://%env(HOST)%:%env(PORT)%/db');
+
+        self::assertSame('mysql://localhost:3306/db', $result);
+    }
+
+    public function testEnsureLoadedOnlyRunsOnce(): void
+    {
+        \file_put_contents($this->tmpDir . '/.env', "KEY=value\n");
+
+        $resolver = new EnvResolver($this->tmpDir);
+
+        // Call twice — second call should use cached data
+        $first = $resolver->get('KEY');
+        $second = $resolver->get('KEY');
+
+        self::assertSame($first, $second);
+        self::assertSame('value', $first);
+    }
+
+    public function testDumpEnvWithNonArrayReturnsBaseEnv(): void
+    {
+        \file_put_contents($this->tmpDir . '/.env', "KEY=from_env\n");
+        \file_put_contents($this->tmpDir . '/.env.local.php', "<?php\nreturn 'not an array';\n");
+
+        $resolver = new EnvResolver($this->tmpDir);
+
+        // Should still have the .env value since .env.local.php is not a valid array
+        self::assertSame('from_env', $resolver->get('KEY'));
+    }
+
+    public function testNoDotEnvFileReturnsEmpty(): void
+    {
+        $resolver = new EnvResolver($this->tmpDir);
+
+        self::assertNull($resolver->get('ANY_KEY'));
+        self::assertSame([], $resolver->all());
+    }
 }

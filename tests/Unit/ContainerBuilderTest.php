@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AsceticSoft\Wirebox\Tests\Unit;
 
 use AsceticSoft\Wirebox\ContainerBuilder;
+use AsceticSoft\Wirebox\Tests\Fixtures\DatabaseLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\ExcludedService;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\LoggerInterface;
@@ -14,6 +15,8 @@ use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithParam;
 use AsceticSoft\Wirebox\Tests\Fixtures\SimpleService;
 use AsceticSoft\Wirebox\Tests\Fixtures\TransientService;
 use PHPUnit\Framework\TestCase;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\ConcreteClass;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\Sub\SubConcreteClass;
 
 final class ContainerBuilderTest extends TestCase
 {
@@ -45,8 +48,8 @@ final class ContainerBuilderTest extends TestCase
 
         $definitions = $builder->getDefinitions();
 
-        self::assertArrayHasKey('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\ConcreteClass', $definitions);
-        self::assertArrayHasKey('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\Sub\\SubConcreteClass', $definitions);
+        self::assertArrayHasKey(ConcreteClass::class, $definitions);
+        self::assertArrayHasKey(SubConcreteClass::class, $definitions);
     }
 
     public function testScanSkipsExcludedAttribute(): void
@@ -94,7 +97,7 @@ final class ContainerBuilderTest extends TestCase
         $definitions = $builder->getDefinitions();
 
         self::assertArrayNotHasKey(
-            'AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\Sub\\SubConcreteClass',
+            SubConcreteClass::class,
             $definitions,
         );
     }
@@ -164,12 +167,138 @@ final class ContainerBuilderTest extends TestCase
         self::assertInstanceOf(ServiceWithDeps::class, $service);
 
         // Service with #[Inject] attribute
+        /** @var ServiceWithInject $injected */
         $injected = $container->get(ServiceWithInject::class);
         self::assertInstanceOf(FileLogger::class, $injected->logger);
 
         // Service with #[Param] attribute
+        /** @var ServiceWithParam $paramService */
         $paramService = $container->get(ServiceWithParam::class);
         self::assertSame('testhost', $paramService->dbHost);
         self::assertFalse($paramService->debug);
+    }
+
+    public function testRegisterReturnsExistingDefinition(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        $first = $builder->register(SimpleService::class);
+        $first->tag('first_tag');
+
+        $second = $builder->register(SimpleService::class);
+
+        // Should return the same definition
+        self::assertSame($first, $second);
+        self::assertContains('first_tag', $second->getTags());
+    }
+
+    public function testRegisterExistingWithFactoryUpdatesFactory(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        $builder->register(SimpleService::class);
+        $factory = fn () => new SimpleService();
+        $definition = $builder->register(SimpleService::class, $factory);
+
+        self::assertSame($factory, $definition->getFactory());
+    }
+
+    public function testParameterWithPlainValue(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->parameter('app.name', 'Wirebox');
+
+        $container = $builder->build();
+
+        self::assertSame('Wirebox', $container->getParameter('app.name'));
+    }
+
+    public function testScanAutoBindsInterfaces(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../Fixtures');
+
+        $bindings = $builder->getBindings();
+
+        // LoggerInterface should be auto-bound to one of the implementations
+        self::assertArrayHasKey(LoggerInterface::class, $bindings);
+    }
+
+    public function testExplicitBindOverridesAutoBind(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../Fixtures');
+        $builder->bind(LoggerInterface::class, DatabaseLogger::class);
+
+        $bindings = $builder->getBindings();
+
+        self::assertSame(DatabaseLogger::class, $bindings[LoggerInterface::class]);
+    }
+
+    public function testScanSkipsAlreadyRegistered(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        // Register SimpleService explicitly first
+        $builder->register(SimpleService::class)->transient();
+
+        // Now scan — should NOT overwrite the existing definition
+        $builder->scan(__DIR__ . '/../Fixtures');
+
+        $definitions = $builder->getDefinitions();
+        self::assertFalse($definitions[SimpleService::class]->isSingleton());
+    }
+
+    public function testCompileCreatesFile(): void
+    {
+        \file_put_contents($this->tmpDir . '/.env', "DB_HOST=testhost\n");
+
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->register(SimpleService::class);
+        $builder->parameter('db.host', '%env(DB_HOST)%');
+
+        $outputPath = $this->tmpDir . '/CompiledTest.php';
+        $builder->compile($outputPath, 'CompiledTest');
+
+        self::assertFileExists($outputPath);
+
+        $content = (string) \file_get_contents($outputPath);
+        self::assertStringContainsString('class CompiledTest', $content);
+    }
+
+    public function testExcludeReturnsSelfForFluent(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        $result = $builder->exclude('*.test.php');
+
+        self::assertSame($builder, $result);
+    }
+
+    public function testBindReturnsSelfForFluent(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        $result = $builder->bind(LoggerInterface::class, FileLogger::class);
+
+        self::assertSame($builder, $result);
+    }
+
+    public function testParameterReturnsSelfForFluent(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        $result = $builder->parameter('key', 'value');
+
+        self::assertSame($builder, $result);
+    }
+
+    public function testScanReturnsSelfForFluent(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        $result = $builder->scan(__DIR__ . '/../Fixtures/Scan');
+
+        self::assertSame($builder, $result);
     }
 }
