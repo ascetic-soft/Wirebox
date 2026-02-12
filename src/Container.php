@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AsceticSoft\Wirebox;
 
+use AsceticSoft\Wirebox\Attribute\Lazy as LazyAttr;
 use AsceticSoft\Wirebox\Attribute\Transient as TransientAttr;
 use AsceticSoft\Wirebox\Autowire\Autowirer;
 use AsceticSoft\Wirebox\Env\EnvResolver;
@@ -14,19 +15,19 @@ use Psr\Container\ContainerInterface;
 class Container implements ContainerInterface
 {
     /** @var array<string, Definition> */
-    private array $definitions = [];
+    private array $definitions;
 
     /** @var array<string, string> Interface/abstract -> concrete class bindings */
-    private array $bindings = [];
+    private array $bindings;
 
     /** @var array<string, object> Singleton instance cache */
     private array $instances = [];
 
     /** @var array<string, mixed> Resolved parameters */
-    private array $parameters = [];
+    private array $parameters;
 
     /** @var array<string, list<string>> Tag -> list of service IDs */
-    private array $tags = [];
+    private array $tags;
 
     private readonly Autowirer $autowirer;
 
@@ -184,6 +185,45 @@ class Container implements ContainerInterface
 
     private function resolveDefinition(string $id, Definition $definition): object
     {
+        if ($definition->isLazy()) {
+            return $this->resolveLazy($id, $definition);
+        }
+
+        $instance = $this->createInstance($id, $definition);
+
+        // Cache singleton
+        if ($definition->isSingleton()) {
+            $this->instances[$id] = $instance;
+        }
+
+        return $instance;
+    }
+
+    /**
+     * Create a lazy proxy that defers real instantiation until first access.
+     * Uses PHP 8.4 native ReflectionClass::newLazyProxy().
+     */
+    private function resolveLazy(string $id, Definition $definition): object
+    {
+        $className = $definition->getClassName() ?? $id;
+        /** @var class-string $className */
+        $ref = new \ReflectionClass($className);
+
+        $proxy = $ref->newLazyProxy(fn (): object => $this->createInstance($id, $definition));
+
+        // Cache the proxy itself for singletons
+        if ($definition->isSingleton()) {
+            $this->instances[$id] = $proxy;
+        }
+
+        return $proxy;
+    }
+
+    /**
+     * Perform the actual instantiation and setter injection for a definition.
+     */
+    private function createInstance(string $id, Definition $definition): object
+    {
         $factory = $definition->getFactory();
 
         if ($factory !== null) {
@@ -205,27 +245,32 @@ class Container implements ContainerInterface
             $method->invokeArgs($instance, $args);
         }
 
-        // Cache singleton
-        if ($definition->isSingleton()) {
-            $this->instances[$id] = $instance;
-        }
-
         return $instance;
     }
 
     /**
      * Auto-wire a class that has no explicit definition.
-     * Reads class attributes to determine lifetime.
+     * Reads class attributes to determine lifetime and laziness.
      *
      * @param class-string $className
      */
     private function autowireClass(string $className): object
     {
-        $instance = $this->autowirer->resolve($className, $this);
-
-        // Check class attributes for lifetime
         $ref = new \ReflectionClass($className);
         $isTransient = $ref->getAttributes(TransientAttr::class) !== [];
+        $isLazy = $ref->getAttributes(LazyAttr::class) !== [];
+
+        if ($isLazy) {
+            $proxy = $ref->newLazyProxy(fn (): object => $this->autowirer->resolve($className, $this));
+
+            if (!$isTransient) {
+                $this->instances[$className] = $proxy;
+            }
+
+            return $proxy;
+        }
+
+        $instance = $this->autowirer->resolve($className, $this);
 
         if (!$isTransient) {
             $this->instances[$className] = $instance;

@@ -15,9 +15,10 @@ Lightweight PHP 8.4 DI container with autowiring, directory scanning, PHP attrib
 - **PSR-11** compatible (`Psr\Container\ContainerInterface`)
 - **Autowiring** — automatic constructor dependency resolution via reflection
 - **Directory scanning** — point at a directory, all classes are auto-registered
-- **PHP Attributes** — `#[Inject]`, `#[Singleton]`, `#[Transient]`, `#[Tag]`, `#[Param]`, `#[Exclude]`
+- **PHP Attributes** — `#[Inject]`, `#[Singleton]`, `#[Transient]`, `#[Lazy]`, `#[Tag]`, `#[Param]`, `#[Exclude]`
 - **Dotenv** — built-in `.env` parser with 3-level priority (no external dependencies)
 - **Tagged services** — group services by tag and retrieve them as a collection
+- **Lazy proxies** — deferred instantiation via PHP 8.4 native lazy objects
 - **Compiled container** — generate a PHP class with zero reflection at runtime
 - **Setter injection** — configure method calls on services after instantiation
 - **Circular dependency detection** — clear error messages with the full dependency chain
@@ -128,6 +129,7 @@ Override or configure individual service definitions:
 ```php
 $builder->register(FileLogger::class)
     ->transient()                                   // New instance every time
+    ->lazy()                                        // Deferred instantiation
     ->tag('logger')                                 // Add a tag
     ->call('setFormatter', [JsonFormatter::class]);  // Setter injection
 ```
@@ -220,6 +222,35 @@ class RequestContext
 {
 }
 ```
+
+### `#[Lazy]`
+
+Return a lightweight proxy immediately; the real instance is created only when a property or method is first accessed. Uses PHP 8.4 native lazy objects (`ReflectionClass::newLazyProxy`):
+
+```php
+use AsceticSoft\Wirebox\Attribute\Lazy;
+
+#[Lazy]
+class HeavyReportGenerator
+{
+    public function __construct(
+        private Connection $db,
+        private CacheInterface $cache,
+    ) {
+        // expensive setup...
+    }
+}
+```
+
+Can be combined with `#[Transient]` to create a new lazy proxy on every `get()` call.
+
+The same behavior is available via the fluent API:
+
+```php
+$builder->register(HeavyReportGenerator::class)->lazy();
+```
+
+Lazy proxies are fully supported by the compiled container.
 
 ### `#[Tag]`
 

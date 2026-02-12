@@ -14,6 +14,8 @@ final class Definition
 {
     private Lifetime $lifetime = Lifetime::Singleton;
 
+    private bool $lazy = false;
+
     /** @var list<string> */
     private array $tags = [];
 
@@ -47,6 +49,16 @@ final class Definition
     public function lifetime(Lifetime $lifetime): self
     {
         $this->lifetime = $lifetime;
+        return $this;
+    }
+
+    /**
+     * Mark this service as lazy — a proxy is returned immediately,
+     * and the real instance is created only on first access.
+     */
+    public function lazy(bool $lazy = true): self
+    {
+        $this->lazy = $lazy;
         return $this;
     }
 
@@ -125,5 +137,10 @@ final class Definition
     public function isSingleton(): bool
     {
         return $this->lifetime === Lifetime::Singleton;
+    }
+
+    public function isLazy(): bool
+    {
+        return $this->lazy;
     }
 }

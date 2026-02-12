@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AsceticSoft\Wirebox;
 
 use AsceticSoft\Wirebox\Attribute\Exclude;
+use AsceticSoft\Wirebox\Attribute\Lazy as LazyAttr;
 use AsceticSoft\Wirebox\Attribute\Tag as TagAttr;
 use AsceticSoft\Wirebox\Attribute\Transient as TransientAttr;
 use AsceticSoft\Wirebox\Compiler\ContainerCompiler;
@@ -80,6 +81,11 @@ final class ContainerBuilder
                 $definition->singleton();
             }
 
+            // Read #[Lazy] attribute
+            if ($ref->getAttributes(LazyAttr::class) !== []) {
+                $definition->lazy();
+            }
+
             // Read #[Tag] attributes
             $tagAttrs = $ref->getAttributes(TagAttr::class);
             foreach ($tagAttrs as $tagAttr) {
@@ -131,7 +137,6 @@ final class ContainerBuilder
      * Register a service definition.
      *
      * @param class-string $id
-     * @param (\Closure(Container): mixed)|null $factory
      */
     public function register(string $id, ?\Closure $factory = null): Definition
     {
@@ -239,10 +244,6 @@ final class ContainerBuilder
      */
     private function resolveParameters(): array
     {
-        $resolved = [];
-        foreach ($this->parameters as $name => $value) {
-            $resolved[$name] = $this->envResolver->resolveParameter($value);
-        }
-        return $resolved;
+        return array_map(fn ($value) => $this->envResolver->resolveParameter($value), $this->parameters);
     }
 }

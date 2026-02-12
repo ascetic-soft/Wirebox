@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace AsceticSoft\Wirebox\Compiler;
 
+use AsceticSoft\Wirebox\Attribute\Inject;
+use AsceticSoft\Wirebox\Attribute\Param;
 use AsceticSoft\Wirebox\Definition;
 
 /**
@@ -64,10 +66,8 @@ final class ContainerCompiler
         );
 
         $dir = \dirname($outputPath);
-        if (!\is_dir($dir)) {
-            if (!mkdir($dir, 0o755, true) && !is_dir($dir)) {
-                throw new \RuntimeException(\sprintf('Directory "%s" was not created', $dir));
-            }
+        if (!\is_dir($dir) && !mkdir($dir, 0o755, true) && !is_dir($dir)) {
+            throw new \RuntimeException(\sprintf('Directory "%s" was not created', $dir));
         }
 
         \file_put_contents($outputPath, $code);
@@ -90,8 +90,9 @@ final class ContainerCompiler
     ): string {
         $lines = [];
         $isSingleton = $definition->isSingleton();
+        $isLazy = $definition->isLazy();
 
-        $lines[] = "    protected function {$methodName}(): \\{$targetClass}";
+        $lines[] = "    protected function $methodName(): \\$targetClass";
         $lines[] = '    {';
 
         if ($isSingleton) {
@@ -101,25 +102,68 @@ final class ContainerCompiler
             $lines[] = '';
         }
 
+        if ($isLazy) {
+            $lines[] = "        \$ref = new \\ReflectionClass(\\$targetClass::class);";
+            $lines[] = "        \$instance = \$ref->newLazyProxy(function (): \\$targetClass {";
+            $lines[] = "            return \$this->create_$methodName();";
+            $lines[] = '        });';
+        } else {
+            $lines = [...$lines, ...$this->generateInstantiationLines($targetClass, $definition)];
+        }
+
+        if ($isSingleton) {
+            $lines[] = '';
+            $lines[] = '        $this->instances[' . \var_export($id, true) . '] = $instance;';
+        }
+
+        $lines[] = '';
+        $lines[] = '        return $instance;';
+        $lines[] = '    }';
+
+        // Generate the private factory method for lazy services
+        if ($isLazy) {
+            $lines[] = '';
+            $lines[] = "    private function create_$methodName(): \\$targetClass";
+            $lines[] = '    {';
+            $lines = [...$lines, ...$this->generateInstantiationLines($targetClass, $definition)];
+            $lines[] = '';
+            $lines[] = '        return $instance;';
+            $lines[] = '    }';
+        }
+
+        return \implode("\n", $lines);
+    }
+
+    /**
+     * Generate the instantiation and setter-injection lines for a service.
+     *
+     * @param class-string $targetClass
+     *
+     * @return list<string>
+     */
+    private function generateInstantiationLines(string $targetClass, Definition $definition): array
+    {
+        $lines = [];
+
         // Resolve constructor parameters
         try {
             $ref = new \ReflectionClass($targetClass);
             $constructor = $ref->getConstructor();
 
             if ($constructor === null || $constructor->getNumberOfParameters() === 0) {
-                $lines[] = "        \$instance = new \\{$targetClass}();";
+                $lines[] = "        \$instance = new \\$targetClass();";
             } else {
                 $args = [];
                 foreach ($constructor->getParameters() as $param) {
                     $args[] = $this->generateParameterResolution($param);
                 }
                 $argsCode = \implode(",\n            ", $args);
-                $lines[] = "        \$instance = new \\{$targetClass}(";
-                $lines[] = "            {$argsCode},";
+                $lines[] = "        \$instance = new \\$targetClass(";
+                $lines[] = "            $argsCode,";
                 $lines[] = '        );';
             }
         } catch (\ReflectionException) {
-            $lines[] = "        \$instance = new \\{$targetClass}();";
+            $lines[] = "        \$instance = new \\$targetClass();";
         }
 
         // Method calls (setter injection)
@@ -133,19 +177,10 @@ final class ContainerCompiler
                 }
             }
             $callArgsStr = \implode(', ', $callArgs);
-            $lines[] = "        \$instance->{$call['method']}({$callArgsStr});";
+            $lines[] = "        \$instance->{$call['method']}($callArgsStr);";
         }
 
-        if ($isSingleton) {
-            $lines[] = '';
-            $lines[] = '        $this->instances[' . \var_export($id, true) . '] = $instance;';
-        }
-
-        $lines[] = '';
-        $lines[] = '        return $instance;';
-        $lines[] = '    }';
-
-        return \implode("\n", $lines);
+        return $lines;
     }
 
     private function generateParameterResolution(\ReflectionParameter $param): string
@@ -153,14 +188,14 @@ final class ContainerCompiler
         $type = $param->getType();
 
         // Check for #[Inject] attribute
-        $injectAttrs = $param->getAttributes(\AsceticSoft\Wirebox\Attribute\Inject::class);
+        $injectAttrs = $param->getAttributes(Inject::class);
         if ($injectAttrs !== []) {
             $inject = $injectAttrs[0]->newInstance();
             return '$this->get(' . \var_export($inject->id, true) . ')';
         }
 
         // Check for #[Param] attribute
-        $paramAttrs = $param->getAttributes(\AsceticSoft\Wirebox\Attribute\Param::class);
+        $paramAttrs = $param->getAttributes(Param::class);
         if ($paramAttrs !== []) {
             $paramAttr = $paramAttrs[0]->newInstance();
             return '$this->getParameter(' . \var_export($paramAttr->name, true) . ')';
@@ -207,17 +242,17 @@ final class ContainerCompiler
         $lines[] = '';
 
         if ($namespace !== '') {
-            $lines[] = "namespace {$namespace};";
+            $lines[] = "namespace $namespace;";
             $lines[] = '';
         }
 
         $baseClass = '\\' . CompiledContainer::class;
 
-        $lines[] = "/**";
-        $lines[] = " * Auto-generated compiled container.";
-        $lines[] = " * DO NOT EDIT — regenerate with ContainerBuilder::compile().";
-        $lines[] = " */";
-        $lines[] = "class {$className} extends {$baseClass}";
+        $lines[] = '/**';
+        $lines[] = ' * Auto-generated compiled container.';
+        $lines[] = ' * DO NOT EDIT — regenerate with ContainerBuilder::compile().';
+        $lines[] = ' */';
+        $lines[] = "class $className extends $baseClass";
         $lines[] = '{';
         $lines[] = '    public function __construct()';
         $lines[] = '    {';
@@ -265,9 +300,9 @@ final class ContainerCompiler
             } else {
                 $valueStr = \var_export($value, true);
             }
-            $lines[] = "{$innerIndent}{$keyStr} => {$valueStr},";
+            $lines[] = "$innerIndent$keyStr => $valueStr,";
         }
-        $lines[] = "{$indent}]";
+        $lines[] = "$indent]";
 
         return \implode("\n", $lines);
     }

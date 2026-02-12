@@ -9,6 +9,7 @@ use AsceticSoft\Wirebox\Exception\ContainerException;
 use AsceticSoft\Wirebox\Tests\Fixtures\DatabaseLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\ExcludedService;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
+use AsceticSoft\Wirebox\Tests\Fixtures\LazyService;
 use AsceticSoft\Wirebox\Tests\Fixtures\LoggerInterface;
 use AsceticSoft\Wirebox\Tests\Fixtures\Scan\SomeInterface;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithDeps;
@@ -365,6 +366,33 @@ final class ContainerBuilderTest extends TestCase
         $result = $builder->scan(__DIR__ . '/../Fixtures/Scan');
 
         self::assertSame($builder, $result);
+    }
+
+    public function testScanReadsLazyAttribute(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../Fixtures');
+        $builder->bind(LoggerInterface::class, FileLogger::class);
+
+        $definitions = $builder->getDefinitions();
+
+        self::assertTrue($definitions[LazyService::class]->isLazy());
+    }
+
+    public function testScanLazyServiceResolvesAsProxy(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../Fixtures');
+        $builder->bind(LoggerInterface::class, FileLogger::class);
+
+        $container = $builder->build();
+
+        $service = $container->get(LazyService::class);
+
+        self::assertInstanceOf(LazyService::class, $service);
+
+        $ref = new \ReflectionClass(LazyService::class);
+        self::assertTrue($ref->isUninitializedLazyObject($service));
     }
 
     public function testScanSkipsNonLoadableClass(): void

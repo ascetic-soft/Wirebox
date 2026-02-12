@@ -11,6 +11,9 @@ use AsceticSoft\Wirebox\Exception\ContainerException;
 use AsceticSoft\Wirebox\Exception\NotFoundException;
 use AsceticSoft\Wirebox\Tests\Fixtures\DatabaseLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
+use AsceticSoft\Wirebox\Tests\Fixtures\LazyService;
+use AsceticSoft\Wirebox\Tests\Fixtures\LazyServiceWithDeps;
+use AsceticSoft\Wirebox\Tests\Fixtures\LazyTransientService;
 use AsceticSoft\Wirebox\Tests\Fixtures\LoggerInterface;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithDeps;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithSetter;
@@ -333,4 +336,185 @@ final class ContainerTest extends TestCase
         self::assertNull($container->getParameter('NONEXISTENT'));
     }
 
+    // --- Lazy proxy tests ---
+
+    public function testLazyDefinitionReturnsUninitializedProxy(): void
+    {
+        $definition = new Definition(className: LazyService::class)->lazy();
+        $container = new Container(
+            definitions: [LazyService::class => $definition],
+        );
+
+        LazyService::setInstanceCount(0);
+        $service = $container->get(LazyService::class);
+
+        self::assertInstanceOf(LazyService::class, $service);
+
+        // The proxy should be uninitialized until a property is accessed
+        $ref = new \ReflectionClass(LazyService::class);
+        self::assertTrue($ref->isUninitializedLazyObject($service));
+        self::assertSame(0, LazyService::getInstanceCount());
+    }
+
+    public function testLazyProxyInitializesOnPropertyAccess(): void
+    {
+        $definition = new Definition(className: LazyService::class)->lazy();
+        $container = new Container(
+            definitions: [LazyService::class => $definition],
+        );
+
+        LazyService::setInstanceCount(0);
+        $service = $container->get(LazyService::class);
+
+        // Before property access — still lazy
+        $ref = new \ReflectionClass(LazyService::class);
+        self::assertTrue($ref->isUninitializedLazyObject($service));
+
+        // Property access triggers initialization
+        $id = $service->id;
+        self::assertNotEmpty($id);
+        self::assertFalse($ref->isUninitializedLazyObject($service));
+        self::assertSame(1, LazyService::getInstanceCount());
+    }
+
+    public function testLazySingletonReturnsSameProxy(): void
+    {
+        $definition = new Definition(className: LazyService::class)->lazy();
+        $container = new Container(
+            definitions: [LazyService::class => $definition],
+        );
+
+        $a = $container->get(LazyService::class);
+        $b = $container->get(LazyService::class);
+
+        self::assertSame($a, $b);
+    }
+
+    public function testLazyTransientReturnsNewProxyEachTime(): void
+    {
+        $definition = new Definition(className: LazyService::class)->lazy()->transient();
+        $container = new Container(
+            definitions: [LazyService::class => $definition],
+        );
+
+        $a = $container->get(LazyService::class);
+        $b = $container->get(LazyService::class);
+
+        self::assertNotSame($a, $b);
+    }
+
+    public function testLazyDoesNotInstantiateUntilPropertyAccessed(): void
+    {
+        LazyService::setInstanceCount(0);
+
+        $definition = new Definition(className: LazyService::class)->lazy();
+        $container = new Container(
+            definitions: [LazyService::class => $definition],
+        );
+
+        $service = $container->get(LazyService::class);
+
+        // Constructor should NOT have been called yet
+        self::assertSame(0, LazyService::getInstanceCount());
+
+        // Accessing a property triggers initialization
+        $id = $service->id;
+        self::assertStringStartsWith('lazy_', $id);
+        self::assertSame(1, LazyService::getInstanceCount());
+    }
+
+    public function testLazyWithFactory(): void
+    {
+        $called = false;
+        $definition = new Definition(
+            className: LazyService::class,
+            factory: function () use (&$called) {
+                $called = true;
+                return new LazyService();
+            },
+        )->lazy();
+        $container = new Container(
+            definitions: [LazyService::class => $definition],
+        );
+
+        $service = $container->get(LazyService::class);
+
+        // Factory should NOT have been called yet
+        self::assertFalse($called);
+        self::assertInstanceOf(LazyService::class, $service);
+
+        // Property access triggers factory
+        $id = $service->id;
+        self::assertStringStartsWith('lazy_', $id);
+        self::assertTrue($called);
+    }
+
+    public function testLazyAutoWireWithAttribute(): void
+    {
+        $container = new Container();
+
+        $service = $container->get(LazyService::class);
+
+        self::assertInstanceOf(LazyService::class, $service);
+
+        $ref = new \ReflectionClass(LazyService::class);
+        self::assertTrue($ref->isUninitializedLazyObject($service));
+
+        // Property access triggers initialization
+        $id = $service->id;
+        self::assertStringStartsWith('lazy_', $id);
+        self::assertFalse($ref->isUninitializedLazyObject($service));
+    }
+
+    public function testLazyAutoWireWithDependencies(): void
+    {
+        $container = new Container();
+
+        $service = $container->get(LazyServiceWithDeps::class);
+
+        self::assertInstanceOf(LazyServiceWithDeps::class, $service);
+
+        $ref = new \ReflectionClass(LazyServiceWithDeps::class);
+        self::assertTrue($ref->isUninitializedLazyObject($service));
+
+        // Access triggers initialization and resolves dependencies
+        self::assertInstanceOf(SimpleService::class, $service->simple);
+        self::assertFalse($ref->isUninitializedLazyObject($service));
+    }
+
+    public function testLazyTransientAttribute(): void
+    {
+        $container = new Container();
+
+        $a = $container->get(LazyTransientService::class);
+        $b = $container->get(LazyTransientService::class);
+
+        self::assertInstanceOf(LazyTransientService::class, $a);
+        self::assertInstanceOf(LazyTransientService::class, $b);
+        self::assertNotSame($a, $b);
+    }
+
+    public function testLazyWithSetterInjection(): void
+    {
+        $loggerDef = new Definition(className: FileLogger::class);
+        $setterDef = new Definition(className: ServiceWithSetter::class)
+            ->lazy()
+            ->call('setLogger', [FileLogger::class]);
+
+        $container = new Container(
+            definitions: [
+                FileLogger::class => $loggerDef,
+                ServiceWithSetter::class => $setterDef,
+            ],
+        );
+
+        /** @var ServiceWithSetter $service */
+        $service = $container->get(ServiceWithSetter::class);
+
+        $ref = new \ReflectionClass(ServiceWithSetter::class);
+        self::assertTrue($ref->isUninitializedLazyObject($service));
+
+        // Accessing property triggers initialization, including setter injection
+        self::assertInstanceOf(FileLogger::class, $service->logger);
+    }
 }

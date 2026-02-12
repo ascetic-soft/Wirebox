@@ -20,6 +20,7 @@ use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithUnresolvable;
 use AsceticSoft\Wirebox\Tests\Fixtures\SimpleService;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
+use AsceticSoft\Wirebox\Tests\Fixtures\LazyService;
 
 final class CompilerTest extends TestCase
 {
@@ -589,6 +590,112 @@ final class CompilerTest extends TestCase
         $viaBinding = $container->get(LoggerInterface::class);
 
         self::assertSame($direct, $viaBinding);
+    }
+
+    public function testCompileWithLazyDefinition(): void
+    {
+        $compiler = new ContainerCompiler();
+        $outputPath = $this->tmpDir . '/LazyCompiled.php';
+        $uniqueClass = 'LazyCompiled_' . \uniqid();
+
+        LazyService::setInstanceCount(0);
+
+        $compiler->compile(
+            definitions: [
+                LazyService::class => new Definition(className: LazyService::class)->lazy(),
+            ],
+            bindings: [],
+            parameters: [],
+            tags: [],
+            outputPath: $outputPath,
+            className: $uniqueClass,
+        );
+
+        $content = (string) \file_get_contents($outputPath);
+        self::assertStringContainsString('newLazyProxy', $content);
+
+        require_once $outputPath;
+        /** @var CompiledContainer $container */
+        $container = new $uniqueClass();
+
+        $service = $container->get(LazyService::class);
+        self::assertInstanceOf(LazyService::class, $service);
+
+        // Should be an uninitialized lazy proxy
+        $ref = new \ReflectionClass(LazyService::class);
+        self::assertTrue($ref->isUninitializedLazyObject($service));
+        self::assertSame(0, LazyService::getInstanceCount());
+
+        // Singleton — same proxy returned
+        self::assertSame($service, $container->get(LazyService::class));
+
+        // Property access triggers initialization
+        $id = $service->id;
+        self::assertNotEmpty($id);
+        self::assertFalse($ref->isUninitializedLazyObject($service));
+        self::assertSame(1, LazyService::getInstanceCount());
+    }
+
+    public function testCompileWithLazyAndDependencies(): void
+    {
+        $compiler = new ContainerCompiler();
+        $outputPath = $this->tmpDir . '/LazyDeps.php';
+        $uniqueClass = 'LazyDeps_' . \uniqid();
+
+        $compiler->compile(
+            definitions: [
+                SimpleService::class => new Definition(className: SimpleService::class),
+                ServiceWithDeps::class => new Definition(className: ServiceWithDeps::class)->lazy(),
+            ],
+            bindings: [],
+            parameters: [],
+            tags: [],
+            outputPath: $outputPath,
+            className: $uniqueClass,
+        );
+
+        require_once $outputPath;
+        /** @var CompiledContainer $container */
+        $container = new $uniqueClass();
+
+        /** @var ServiceWithDeps $service */
+        $service = $container->get(ServiceWithDeps::class);
+
+        self::assertInstanceOf(ServiceWithDeps::class, $service);
+
+        $ref = new \ReflectionClass(ServiceWithDeps::class);
+        self::assertTrue($ref->isUninitializedLazyObject($service));
+
+        // Access triggers initialization — dependencies resolved
+        self::assertInstanceOf(SimpleService::class, $service->simple);
+        self::assertFalse($ref->isUninitializedLazyObject($service));
+    }
+
+    public function testCompileWithLazyTransient(): void
+    {
+        $compiler = new ContainerCompiler();
+        $outputPath = $this->tmpDir . '/LazyTransient.php';
+        $uniqueClass = 'LazyTransient_' . \uniqid();
+
+        $compiler->compile(
+            definitions: [
+                SimpleService::class => new Definition(className: SimpleService::class)->lazy()->transient(),
+            ],
+            bindings: [],
+            parameters: [],
+            tags: [],
+            outputPath: $outputPath,
+            className: $uniqueClass,
+        );
+
+        require_once $outputPath;
+        /** @var CompiledContainer $container */
+        $container = new $uniqueClass();
+
+        $a = $container->get(SimpleService::class);
+        $b = $container->get(SimpleService::class);
+
+        self::assertNotSame($a, $b);
     }
 
     public function testCompileThrowsWhenDirectoryCannotBeCreated(): void

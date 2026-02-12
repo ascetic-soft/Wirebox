@@ -163,6 +163,31 @@ final class DefinitionTest extends TestCase
         self::assertSame($factory, $definition->getFactory());
     }
 
+    public function testLazyIsFalseByDefault(): void
+    {
+        $definition = new Definition();
+
+        self::assertFalse($definition->isLazy());
+    }
+
+    public function testLazyFluentSetter(): void
+    {
+        $definition = new Definition();
+        $result = $definition->lazy();
+
+        self::assertSame($definition, $result);
+        self::assertTrue($definition->isLazy());
+    }
+
+    public function testLazyCanBeDisabled(): void
+    {
+        $definition = new Definition();
+        $definition->lazy();
+        $definition->lazy(false);
+
+        self::assertFalse($definition->isLazy());
+    }
+
     public function testFluentChaining(): void
     {
         $factory = fn (Container $c) => new SimpleService();
@@ -171,6 +196,7 @@ final class DefinitionTest extends TestCase
             ->setClassName(SimpleService::class)
             ->setFactory($factory)
             ->transient()
+            ->lazy()
             ->tag('service', 'injectable')
             ->call('init')
             ->call('configure', ['value']);
@@ -178,6 +204,7 @@ final class DefinitionTest extends TestCase
         self::assertSame(SimpleService::class, $definition->getClassName());
         self::assertSame($factory, $definition->getFactory());
         self::assertSame(Lifetime::Transient, $definition->getLifetime());
+        self::assertTrue($definition->isLazy());
         self::assertSame(['service', 'injectable'], $definition->getTags());
         self::assertCount(2, $definition->getMethodCalls());
     }
