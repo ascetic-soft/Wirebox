@@ -247,4 +247,22 @@ final class DotEnvParserTest extends TestCase
 
         self::assertSame(['KEY' => 'value=with=equals'], $result);
     }
+
+    public function testLookupVarFromEnvSuperglobal(): void
+    {
+        $originalEnv = $_ENV['WIREBOX_PARSER_EXT'] ?? null;
+        $_ENV['WIREBOX_PARSER_EXT'] = 'from_env';
+
+        try {
+            $result = $this->parser->parseString('KEY=${WIREBOX_PARSER_EXT}');
+
+            self::assertSame(['KEY' => 'from_env'], $result);
+        } finally {
+            if ($originalEnv === null) {
+                unset($_ENV['WIREBOX_PARSER_EXT']);
+            } else {
+                $_ENV['WIREBOX_PARSER_EXT'] = $originalEnv;
+            }
+        }
+    }
 }

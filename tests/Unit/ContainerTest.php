@@ -332,4 +332,5 @@ final class ContainerTest extends TestCase
 
         self::assertNull($container->getParameter('NONEXISTENT'));
     }
+
 }

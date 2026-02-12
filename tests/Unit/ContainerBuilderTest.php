@@ -361,4 +361,19 @@ final class ContainerBuilderTest extends TestCase
 
         self::assertSame($builder, $result);
     }
+
+    public function testScanSkipsNonLoadableClass(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../Fixtures/Scan');
+
+        $definitions = $builder->getDefinitions();
+
+        // NonLoadable.php has a wrong namespace (BogusNamespace), so class_exists() returns false
+        // and it should be skipped
+        self::assertArrayNotHasKey(
+            'AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\BogusNamespace\\NonLoadable',
+            $definitions,
+        );
+    }
 }

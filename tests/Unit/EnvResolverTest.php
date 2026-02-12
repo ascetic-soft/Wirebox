@@ -222,4 +222,53 @@ final class EnvResolverTest extends TestCase
         self::assertNull($resolver->get('ANY_KEY'));
         self::assertSame([], $resolver->all());
     }
+
+    public function testSystemEnvOverridesDotEnvViaEnvSuperglobal(): void
+    {
+        \file_put_contents($this->tmpDir . '/.env', "WIREBOX_TEST_KEY=from_file\n");
+
+        $originalEnv = $_ENV['WIREBOX_TEST_KEY'] ?? null;
+        $_ENV['WIREBOX_TEST_KEY'] = 'from_system_env';
+
+        try {
+            $resolver = new EnvResolver($this->tmpDir);
+
+            self::assertSame('from_system_env', $resolver->get('WIREBOX_TEST_KEY'));
+        } finally {
+            if ($originalEnv === null) {
+                unset($_ENV['WIREBOX_TEST_KEY']);
+            } else {
+                $_ENV['WIREBOX_TEST_KEY'] = $originalEnv;
+            }
+        }
+    }
+
+    public function testSystemEnvOverridesDotEnvViaServerSuperglobal(): void
+    {
+        \file_put_contents($this->tmpDir . '/.env', "WIREBOX_TEST_SRV=from_file\n");
+
+        $originalEnv = $_ENV['WIREBOX_TEST_SRV'] ?? null;
+        $originalServer = $_SERVER['WIREBOX_TEST_SRV'] ?? null;
+
+        // Make sure $_ENV does NOT have this key so we fall through to $_SERVER
+        unset($_ENV['WIREBOX_TEST_SRV']);
+        $_SERVER['WIREBOX_TEST_SRV'] = 'from_server';
+
+        try {
+            $resolver = new EnvResolver($this->tmpDir);
+
+            self::assertSame('from_server', $resolver->get('WIREBOX_TEST_SRV'));
+        } finally {
+            if ($originalEnv === null) {
+                unset($_ENV['WIREBOX_TEST_SRV']);
+            } else {
+                $_ENV['WIREBOX_TEST_SRV'] = $originalEnv;
+            }
+            if ($originalServer === null) {
+                unset($_SERVER['WIREBOX_TEST_SRV']);
+            } else {
+                $_SERVER['WIREBOX_TEST_SRV'] = $originalServer;
+            }
+        }
+    }
 }

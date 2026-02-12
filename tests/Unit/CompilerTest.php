@@ -13,7 +13,11 @@ use AsceticSoft\Wirebox\Tests\Fixtures\LoggerInterface;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithDeps;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithInject;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithParam;
+use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithDefault;
+use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithNullable;
+use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithNullableBuiltin;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithSetter;
+use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithUnresolvable;
 use AsceticSoft\Wirebox\Tests\Fixtures\SimpleService;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
@@ -448,5 +452,167 @@ final class CompilerTest extends TestCase
         @\unlink($outputPath);
         @\rmdir($nestedDir);
         @\rmdir($this->tmpDir . '/nested');
+    }
+
+    public function testCompileSkipsNonExistentClass(): void
+    {
+        $compiler = new ContainerCompiler();
+        $outputPath = $this->tmpDir . '/SkipNonExistent.php';
+
+        $compiler->compile(
+            definitions: [
+                'NonExistentFakeClass' => new Definition(className: 'NonExistentFakeClass'),
+                SimpleService::class => new Definition(className: SimpleService::class),
+            ],
+            bindings: [],
+            parameters: [],
+            tags: [],
+            outputPath: $outputPath,
+            className: 'SkipNonExistent',
+        );
+
+        $content = (string) \file_get_contents($outputPath);
+        self::assertStringNotContainsString('NonExistentFakeClass', $content);
+        self::assertStringContainsString('SimpleService', $content);
+    }
+
+    public function testCompileWithScalarMethodCallArguments(): void
+    {
+        $compiler = new ContainerCompiler();
+        $outputPath = $this->tmpDir . '/ScalarArgs.php';
+
+        $compiler->compile(
+            definitions: [
+                FileLogger::class => new Definition(className: FileLogger::class),
+                ServiceWithSetter::class => new Definition(className: ServiceWithSetter::class)
+                    ->call('setLogger', [42]),
+            ],
+            bindings: [],
+            parameters: [],
+            tags: [],
+            outputPath: $outputPath,
+            className: 'ScalarArgs',
+        );
+
+        $content = (string) \file_get_contents($outputPath);
+        // Scalar argument should be var_exported (42 as-is)
+        self::assertStringContainsString('42', $content);
+    }
+
+    public function testCompileWithDefaultValueParameter(): void
+    {
+        $compiler = new ContainerCompiler();
+        $outputPath = $this->tmpDir . '/WithDefault.php';
+
+        $compiler->compile(
+            definitions: [
+                ServiceWithDefault::class => new Definition(className: ServiceWithDefault::class),
+            ],
+            bindings: [],
+            parameters: [],
+            tags: [],
+            outputPath: $outputPath,
+            className: 'WithDefault',
+        );
+
+        $content = (string) \file_get_contents($outputPath);
+        // Default value 'default' should appear in the generated code
+        self::assertStringContainsString("'default'", $content);
+    }
+
+    public function testCompileWithNullableBuiltinParameter(): void
+    {
+        $compiler = new ContainerCompiler();
+        $outputPath = $this->tmpDir . '/WithNullable.php';
+
+        $compiler->compile(
+            definitions: [
+                ServiceWithNullableBuiltin::class => new Definition(className: ServiceWithNullableBuiltin::class),
+            ],
+            bindings: [],
+            parameters: [],
+            tags: [],
+            outputPath: $outputPath,
+            className: 'WithNullable',
+        );
+
+        $content = (string) \file_get_contents($outputPath);
+        // Nullable builtin parameter without default should resolve to null
+        self::assertMatchesRegularExpression('/\bnull\b/', $content);
+    }
+
+    public function testCompileWithUnresolvableParameter(): void
+    {
+        $compiler = new ContainerCompiler();
+        $outputPath = $this->tmpDir . '/WithUnresolvable.php';
+
+        $compiler->compile(
+            definitions: [
+                ServiceWithUnresolvable::class => new Definition(className: ServiceWithUnresolvable::class),
+            ],
+            bindings: [],
+            parameters: [],
+            tags: [],
+            outputPath: $outputPath,
+            className: 'WithUnresolvable',
+        );
+
+        $content = (string) \file_get_contents($outputPath);
+        // Unresolvable builtin param should produce a WARNING comment
+        self::assertStringContainsString('WARNING: cannot resolve', $content);
+    }
+
+    public function testCompiledContainerResolveBindingFromInstanceCache(): void
+    {
+        $compiler = new ContainerCompiler();
+        $outputPath = $this->tmpDir . '/BindingCache.php';
+        $uniqueClass = 'BindingCache_' . \uniqid();
+
+        $compiler->compile(
+            definitions: [
+                FileLogger::class => new Definition(className: FileLogger::class),
+            ],
+            bindings: [LoggerInterface::class => FileLogger::class],
+            parameters: [],
+            tags: [],
+            outputPath: $outputPath,
+            className: $uniqueClass,
+        );
+
+        require_once $outputPath;
+        /** @var CompiledContainer $container */
+        $container = new $uniqueClass();
+
+        // First resolve FileLogger directly — caches in instances
+        $direct = $container->get(FileLogger::class);
+
+        // Now resolve via interface binding — should hit the instance cache path
+        $viaBinding = $container->get(LoggerInterface::class);
+
+        self::assertSame($direct, $viaBinding);
+    }
+
+    public function testCompileThrowsWhenDirectoryCannotBeCreated(): void
+    {
+        $compiler = new ContainerCompiler();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/was not created/');
+
+        // /dev/null is a file, so mkdir inside it will fail.
+        // Suppress the PHP warning from mkdir() to avoid PHPUnit failOnWarning.
+        \set_error_handler(static fn () => true);
+        try {
+            $compiler->compile(
+                definitions: [],
+                bindings: [],
+                parameters: [],
+                tags: [],
+                outputPath: '/dev/null/impossible/dir/Container.php',
+                className: 'Impossible',
+            );
+        } finally {
+            \restore_error_handler();
+        }
     }
 }

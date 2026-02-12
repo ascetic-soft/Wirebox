@@ -13,11 +13,15 @@ use AsceticSoft\Wirebox\Tests\Fixtures\CircularA;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\LoggerInterface;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithDefault;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\AbstractClass;
+use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithArrayParam;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithDeps;
+use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithNonBuiltinParam;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithInject;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithIntParam;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithMissingParam;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithNullable;
+use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithOptionalParam;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithSetter;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithUnion;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithUnresolvable;
@@ -244,5 +248,68 @@ final class AutowirerTest extends TestCase
         // But subsequent resolves should still work (stack is clean)
         $instance = $this->autowirer->resolve(SimpleService::class, $container);
         self::assertInstanceOf(SimpleService::class, $instance);
+    }
+
+    public function testResolveWithParamMissingButDefaultValueAvailable(): void
+    {
+        // Container has no 'OPTIONAL' parameter — should fall back to PHP default
+        $container = new Container();
+
+        /** @var ServiceWithOptionalParam $instance */
+        $instance = $this->autowirer->resolve(ServiceWithOptionalParam::class, $container);
+
+        self::assertSame('fallback', $instance->val);
+    }
+
+    public function testCastParameterValueWithNonStringPassesThrough(): void
+    {
+        // When container parameters are already the correct type (non-string),
+        // castParameterValue should return them as-is
+        $container = new Container(
+            parameters: ['PORT' => 8080, 'RATE' => 3.14, 'DEBUG' => true],
+        );
+
+        /** @var ServiceWithIntParam $instance */
+        $instance = $this->autowirer->resolve(ServiceWithIntParam::class, $container);
+
+        self::assertSame(8080, $instance->port);
+        self::assertSame(3.14, $instance->rate);
+        self::assertTrue($instance->debug);
+    }
+
+    public function testCastParameterValueWithArrayType(): void
+    {
+        $container = new Container(
+            parameters: ['CONFIG' => '{"key":"val"}'],
+        );
+
+        /** @var ServiceWithArrayParam $instance */
+        $instance = $this->autowirer->resolve(ServiceWithArrayParam::class, $container);
+
+        self::assertSame(['key' => 'val'], $instance->config);
+    }
+
+    public function testCastParameterValueWithUnionTypePassesThrough(): void
+    {
+        // When #[Param] is on a union-typed parameter (ReflectionUnionType, not ReflectionNamedType),
+        // castParameterValue returns the string value as-is without casting
+        $container = new Container(
+            parameters: ['UNION_VAL' => 'raw_value'],
+        );
+
+        /** @var ServiceWithNonBuiltinParam $instance */
+        $instance = $this->autowirer->resolve(ServiceWithNonBuiltinParam::class, $container);
+
+        self::assertSame('raw_value', $instance->val);
+    }
+
+    public function testThrowsOnAbstractClass(): void
+    {
+        $container = new Container();
+
+        $this->expectException(AutowireException::class);
+        $this->expectExceptionMessageMatches('/not instantiable/');
+
+        $this->autowirer->resolve(AbstractClass::class, $container);
     }
 }
