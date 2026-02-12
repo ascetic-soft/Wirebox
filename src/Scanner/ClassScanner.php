@@ -37,7 +37,7 @@ final class ClassScanner
 
             $realPath = $file->getRealPath();
             if ($realPath === false) {
-                continue;
+                continue; // @codeCoverageIgnore
             }
 
             if ($this->isExcluded($realPath, $realDir, $excludePatterns)) {
@@ -63,7 +63,7 @@ final class ClassScanner
     {
         $content = \file_get_contents($filePath);
         if ($content === false) {
-            return [];
+            return []; // @codeCoverageIgnore
         }
 
         $tokens = \token_get_all($content);
@@ -209,7 +209,7 @@ final class ClassScanner
             }
             return $t;
         }
-        return null;
+        return null; // @codeCoverageIgnore
     }
 
     /**

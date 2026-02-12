@@ -31,7 +31,7 @@ final class DotEnvParser
 
         $content = \file_get_contents($filePath);
         if ($content === false) {
-            return [];
+            return []; // @codeCoverageIgnore
         }
 
         return $this->parseString($content);

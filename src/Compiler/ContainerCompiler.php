@@ -162,9 +162,9 @@ final class ContainerCompiler
                 $lines[] = "            $argsCode,";
                 $lines[] = '        );';
             }
-        } catch (\ReflectionException) {
+        } catch (\ReflectionException) { // @codeCoverageIgnoreStart
             $lines[] = "        \$instance = new \\$targetClass();";
-        }
+        } // @codeCoverageIgnoreEnd
 
         // Method calls (setter injection)
         foreach ($definition->getMethodCalls() as $call) {

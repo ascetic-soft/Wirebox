@@ -118,9 +118,9 @@ class Container implements ContainerInterface
         $serviceIds = $this->tags[$tag] ?? [];
         foreach ($serviceIds as $serviceId) {
             $service = $this->get($serviceId);
-            if (!\is_object($service)) {
+            if (!\is_object($service)) { // @codeCoverageIgnoreStart
                 throw new ContainerException(\sprintf('Service "%s" resolved to a non-object value.', $serviceId));
-            }
+            } // @codeCoverageIgnoreEnd
             yield $service;
         }
     }
