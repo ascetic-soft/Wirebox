@@ -1,6 +1,17 @@
 {
     "name": "ascetic-soft/wirebox",
-    "description": "Lightweight PHP 8.4 DI container with autowiring, directory scanning, PHP attributes, and dotenv support",
+    "description": "Lightweight, zero-config PSR-11 dependency injection container for PHP 8.4+ with autowiring, PHP attributes, compiled container generation, and built-in dotenv support",
+    "keywords": [
+        "dependency-injection",
+        "di",
+        "container",
+        "autowiring",
+        "psr-11",
+        "attributes",
+        "dotenv",
+        "service-container",
+        "ioc"
+    ],
     "type": "library",
     "license": "MIT",
     "autoload": {
