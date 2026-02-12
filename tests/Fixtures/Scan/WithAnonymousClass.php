@@ -8,7 +8,7 @@ class WithAnonymousClass
 {
     public function createAnonymous(): object
     {
-        return new class {
+        return new class () {
             public function hello(): string
             {
                 return 'anonymous';

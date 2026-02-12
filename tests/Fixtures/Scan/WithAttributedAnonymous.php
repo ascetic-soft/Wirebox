@@ -8,7 +8,7 @@ class WithAttributedAnonymous
 {
     public function create(): object
     {
-        return new #[\AllowDynamicProperties] class {
+        return new #[\AllowDynamicProperties] class () {
         };
     }
 }
