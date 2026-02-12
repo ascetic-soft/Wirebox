@@ -97,7 +97,14 @@ Bind an interface to a concrete implementation:
 $builder->bind(LoggerInterface::class, FileLogger::class);
 ```
 
-When scanning, if an interface has exactly one implementation in the scanned directory, it is auto-bound.
+When scanning, if an interface has exactly one implementation in the scanned directory, it is auto-bound automatically.
+If two or more implementations of the same interface are found, the auto-binding becomes ambiguous and `build()` will throw a `ContainerException`. Use an explicit `bind()` call to resolve the ambiguity:
+
+```php
+$builder->scan(__DIR__ . '/Services');
+// PaymentInterface has StripePayment and PayPalPayment — ambiguous!
+$builder->bind(PaymentInterface::class, StripePayment::class);
+```
 
 ### Factory Registration
 

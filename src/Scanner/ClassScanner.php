@@ -21,7 +21,7 @@ final class ClassScanner
     {
         $realDir = \realpath($directory);
         if ($realDir === false || !\is_dir($realDir)) {
-            throw new \InvalidArgumentException("Directory \"$directory\" does not exist.");
+            throw new \InvalidArgumentException(\sprintf('Directory "%s" does not exist.', $directory));
         }
 
         $classes = [];

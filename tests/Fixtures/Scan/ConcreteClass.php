@@ -4,6 +4,6 @@ declare(strict_types=1);
 
 namespace AsceticSoft\Wirebox\Tests\Fixtures\Scan;
 
-class ConcreteClass
+class ConcreteClass implements SomeInterface
 {
 }

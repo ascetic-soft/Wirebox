@@ -84,7 +84,7 @@ class Container implements ContainerInterface
             /** @var class-string $resolvedId */
             $instance = $this->autowireClass($resolvedId);
         } else {
-            throw new NotFoundException("Service \"{$id}\" is not registered and cannot be auto-wired.");
+            throw new NotFoundException(\sprintf('Service "%s" is not registered and cannot be auto-wired.', $id));
         }
 
         return $instance;
@@ -118,7 +118,7 @@ class Container implements ContainerInterface
         foreach ($serviceIds as $serviceId) {
             $service = $this->get($serviceId);
             if (!\is_object($service)) {
-                throw new ContainerException("Service \"{$serviceId}\" resolved to a non-object value.");
+                throw new ContainerException(\sprintf('Service "%s" resolved to a non-object value.', $serviceId));
             }
             yield $service;
         }
@@ -195,7 +195,7 @@ class Container implements ContainerInterface
         }
 
         if (!\is_object($instance)) {
-            throw new ContainerException("Factory for \"{$id}\" must return an object.");
+            throw new ContainerException(\sprintf('Factory for "%s" must return an object.', $id));
         }
 
         // Execute method calls (setter injection)

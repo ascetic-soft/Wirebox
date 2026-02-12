@@ -25,6 +25,9 @@ final class ContainerBuilder
     /** @var array<string, list<string>> Tag -> list of service IDs */
     private array $tags = [];
 
+    /** @var array<string, list<string>> Interface -> implementations (tracked when ambiguous) */
+    private array $ambiguousBindings = [];
+
     /** @var list<string> Glob patterns to exclude from scanning */
     private array $excludePatterns = [];
 
@@ -42,6 +45,11 @@ final class ContainerBuilder
     /**
      * Scan a directory for classes and auto-register them.
      * Skips abstract classes, interfaces, traits, enums, and classes with #[Exclude].
+     *
+     * Auto-binds interfaces that have exactly one implementation.
+     * If multiple implementations are found for the same interface,
+     * the binding is marked as ambiguous and build() will throw
+     * a ContainerException unless resolved with an explicit bind().
      */
     public function scan(string $directory): self
     {
@@ -91,15 +99,18 @@ final class ContainerBuilder
             $interfaces = $ref->getInterfaceNames();
             foreach ($interfaces as $interface) {
                 // Only auto-bind if no explicit binding exists
-                if (!isset($this->bindings[$interface])) {
+                if (isset($this->ambiguousBindings[$interface])) {
+                    // Already marked as ambiguous — just add another implementation
+                    $this->ambiguousBindings[$interface][] = $className;
+                } elseif (!isset($this->bindings[$interface])) {
                     $this->bindings[$interface] = $className;
-                } else {
-                    // Multiple implementations — remove auto-binding (ambiguous)
-                    // The user must use explicit bind() for this interface
-                    if ($this->bindings[$interface] !== $className) {
-                        // Mark as ambiguous by keeping the first one
-                        // User can override with explicit bind()
-                    }
+                } elseif ($this->bindings[$interface] !== $className) {
+                    // Second implementation found — mark as ambiguous
+                    $this->ambiguousBindings[$interface] = [
+                        $this->bindings[$interface],
+                        $className,
+                    ];
+                    unset($this->bindings[$interface]);
                 }
             }
         }
@@ -147,6 +158,7 @@ final class ContainerBuilder
     public function bind(string $abstract, string $concrete): self
     {
         $this->bindings[$abstract] = $concrete;
+        unset($this->ambiguousBindings[$abstract]);
         return $this;
     }
 
@@ -165,6 +177,17 @@ final class ContainerBuilder
      */
     public function build(): Container
     {
+        if ($this->ambiguousBindings !== []) {
+            $interface = \array_key_first($this->ambiguousBindings);
+            $implementations = $this->ambiguousBindings[$interface];
+
+            throw new Exception\ContainerException(\sprintf(
+                'Ambiguous auto-binding for interface "%s": found implementations "%s". Use explicit bind() to resolve the ambiguity.',
+                $interface,
+                \implode('", "', $implementations),
+            ));
+        }
+
         $resolvedParams = $this->resolveParameters();
 
         return new Container(

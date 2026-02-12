@@ -48,7 +48,7 @@ abstract class CompiledContainer implements ContainerInterface
 
         $method = $this->methodMap[$resolvedId] ?? $this->methodMap[$id] ?? null;
         if ($method === null) {
-            throw new NotFoundException("Service \"{$id}\" is not registered in the compiled container.");
+            throw new NotFoundException(\sprintf('Service "%s" is not registered in the compiled container.', $id));
         }
 
         return $this->{$method}();
@@ -73,7 +73,7 @@ abstract class CompiledContainer implements ContainerInterface
         foreach ($serviceIds as $serviceId) {
             $service = $this->get($serviceId);
             if (!\is_object($service)) {
-                throw new NotFoundException("Service \"{$serviceId}\" resolved to a non-object value.");
+                throw new NotFoundException(\sprintf('Service "%s" resolved to a non-object value.', $serviceId));
             }
             yield $service;
         }

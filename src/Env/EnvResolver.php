@@ -80,7 +80,7 @@ final class EnvResolver
         if (\str_contains($expression, ':')) {
             [$type, $name] = \explode(':', $expression, 2);
             $raw = $this->resolved[$name] ?? throw new \RuntimeException(
-                "Environment variable \"{$name}\" is not defined.",
+                \sprintf('Environment variable "%s" is not defined.', $name),
             );
 
             return match ($type) {
@@ -88,12 +88,12 @@ final class EnvResolver
                 'int' => (int) $raw,
                 'float' => (float) $raw,
                 'string' => $raw,
-                default => throw new \RuntimeException("Unknown env cast type \"{$type}\"."),
+                default => throw new \RuntimeException(\sprintf('Unknown env cast type "%s".', $type)),
             };
         }
 
         return $this->resolved[$expression] ?? throw new \RuntimeException(
-            "Environment variable \"{$expression}\" is not defined.",
+            \sprintf('Environment variable "%s" is not defined.', $expression),
         );
     }
 

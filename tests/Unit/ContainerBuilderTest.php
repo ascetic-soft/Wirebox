@@ -66,6 +66,7 @@ final class ContainerBuilderTest extends TestCase
     {
         $builder = new ContainerBuilder($this->tmpDir);
         $builder->scan(__DIR__ . '/../Fixtures');
+        $builder->bind(LoggerInterface::class, FileLogger::class);
 
         $container = $builder->build();
 
@@ -213,15 +214,53 @@ final class ContainerBuilderTest extends TestCase
         self::assertSame('Wirebox', $container->getParameter('app.name'));
     }
 
-    public function testScanAutoBindsInterfaces(): void
+    public function testScanAutoBindsInterfaceWithSingleImplementation(): void
     {
         $builder = new ContainerBuilder($this->tmpDir);
-        $builder->scan(__DIR__ . '/../Fixtures');
+        $builder->scan(__DIR__ . '/../Fixtures/Scan');
 
         $bindings = $builder->getBindings();
 
-        // LoggerInterface should be auto-bound to one of the implementations
-        self::assertArrayHasKey(LoggerInterface::class, $bindings);
+        // SomeInterface has only one implementation (ConcreteClass), so it should be auto-bound
+        self::assertArrayHasKey(\AsceticSoft\Wirebox\Tests\Fixtures\Scan\SomeInterface::class, $bindings);
+        self::assertSame(
+            \AsceticSoft\Wirebox\Tests\Fixtures\Scan\ConcreteClass::class,
+            $bindings[\AsceticSoft\Wirebox\Tests\Fixtures\Scan\SomeInterface::class],
+        );
+    }
+
+    /**
+     * When two classes implement the same interface without an explicit
+     * bind(), build() must throw a ContainerException.
+     */
+    public function testBuildThrowsOnAmbiguousAutoBinding(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../FixturesAmbiguous');
+
+        $this->expectException(\AsceticSoft\Wirebox\Exception\ContainerException::class);
+        $this->expectExceptionMessageMatches('/Ambiguous auto-binding.*PaymentInterface/');
+
+        $builder->build();
+    }
+
+    /**
+     * When two classes implement the same interface but an explicit
+     * bind() is provided, the ambiguity is resolved and build() succeeds.
+     */
+    public function testExplicitBindResolvesAmbiguousAutoBinding(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../FixturesAmbiguous');
+        $builder->bind(
+            \AsceticSoft\Wirebox\Tests\FixturesAmbiguous\PaymentInterface::class,
+            \AsceticSoft\Wirebox\Tests\FixturesAmbiguous\StripePayment::class,
+        );
+
+        $container = $builder->build();
+
+        $payment = $container->get(\AsceticSoft\Wirebox\Tests\FixturesAmbiguous\PaymentInterface::class);
+        self::assertInstanceOf(\AsceticSoft\Wirebox\Tests\FixturesAmbiguous\StripePayment::class, $payment);
     }
 
     public function testExplicitBindOverridesAutoBind(): void

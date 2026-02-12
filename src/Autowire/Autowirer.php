@@ -114,10 +114,13 @@ final class Autowirer
                 if ($param->isDefaultValueAvailable()) {
                     return $param->getDefaultValue();
                 }
-                throw new AutowireException(
-                    "Parameter \"{$paramAttr->name}\" is not defined for parameter \${$param->getName()} "
-                    . "in {$param->getDeclaringClass()?->getName()}::{$param->getDeclaringFunction()->getName()}()",
-                );
+                throw new AutowireException(\sprintf(
+                    'Parameter "%s" is not defined for parameter $%s in %s::%s()',
+                    $paramAttr->name,
+                    $param->getName(),
+                    $param->getDeclaringClass()?->getName() ?? 'unknown',
+                    $param->getDeclaringFunction()->getName(),
+                ));
             }
             return $this->castParameterValue($value, $param);
         }
@@ -156,10 +159,13 @@ final class Autowirer
         }
 
         $className = $param->getDeclaringClass()?->getName() ?? 'unknown';
-        throw new AutowireException(
-            "Cannot resolve parameter \${$param->getName()} in {$className}::{$param->getDeclaringFunction()->getName()}()"
-            . ($type instanceof \ReflectionNamedType ? " (type: {$type->getName()})" : ''),
-        );
+        throw new AutowireException(\sprintf(
+            'Cannot resolve parameter $%s in %s::%s()%s',
+            $param->getName(),
+            $className,
+            $param->getDeclaringFunction()->getName(),
+            $type instanceof \ReflectionNamedType ? \sprintf(' (type: %s)', $type->getName()) : '',
+        ));
     }
 
     /**
@@ -209,13 +215,13 @@ final class Autowirer
     private function reflect(string $className): \ReflectionClass
     {
         if (!\class_exists($className)) {
-            throw new AutowireException("Class \"{$className}\" does not exist or cannot be reflected.");
+            throw new AutowireException(\sprintf('Class "%s" does not exist or cannot be reflected.', $className));
         }
 
         $reflection = new \ReflectionClass($className);
 
         if (!$reflection->isInstantiable()) {
-            throw new AutowireException("Class \"{$className}\" is not instantiable (abstract or interface).");
+            throw new AutowireException(\sprintf('Class "%s" is not instantiable (abstract or interface).', $className));
         }
 
         return $reflection;
