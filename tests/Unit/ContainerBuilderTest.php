@@ -245,6 +245,27 @@ final class ContainerBuilderTest extends TestCase
     }
 
     /**
+     * When three or more classes implement the same interface,
+     * all implementations must appear in the ambiguous binding error.
+     */
+    public function testBuildThrowsOnAmbiguousAutoBindingWithThreeImplementations(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../FixturesAmbiguous');
+
+        try {
+            $builder->build();
+            self::fail('Expected ContainerException was not thrown');
+        } catch (\AsceticSoft\Wirebox\Exception\ContainerException $e) {
+            $message = $e->getMessage();
+            self::assertStringContainsString('PaymentInterface', $message);
+            self::assertStringContainsString('PayPalPayment', $message);
+            self::assertStringContainsString('StripePayment', $message);
+            self::assertStringContainsString('BitcoinPayment', $message);
+        }
+    }
+
+    /**
      * When two classes implement the same interface but an explicit
      * bind() is provided, the ambiguity is resolved and build() succeeds.
      */
