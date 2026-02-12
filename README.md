@@ -2,8 +2,10 @@
 
 [![CI](https://github.com/ascetic-soft/Wirebox/actions/workflows/ci.yml/badge.svg)](https://github.com/ascetic-soft/Wirebox/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/ascetic-soft/Wirebox/graph/badge.svg)](https://codecov.io/gh/ascetic-soft/Wirebox)
-[![PHP Version](https://img.shields.io/packagist/require/ascetic-soft/wirebox/php)](https://packagist.org/packages/ascetic-soft/wirebox)
+[![PHPStan Level 9](https://img.shields.io/badge/phpstan-level%209-brightgreen)](https://phpstan.org/)
 [![Latest Stable Version](https://img.shields.io/packagist/v/ascetic-soft/wirebox)](https://packagist.org/packages/ascetic-soft/wirebox)
+[![Total Downloads](https://img.shields.io/packagist/dt/ascetic-soft/wirebox)](https://packagist.org/packages/ascetic-soft/wirebox)
+[![PHP Version](https://img.shields.io/packagist/dependency-v/ascetic-soft/wirebox/php)](https://packagist.org/packages/ascetic-soft/wirebox)
 [![License](https://img.shields.io/packagist/l/ascetic-soft/wirebox)](https://packagist.org/packages/ascetic-soft/wirebox)
 
 Lightweight PHP 8.4 DI container with autowiring, directory scanning, PHP attributes, and dotenv support.
