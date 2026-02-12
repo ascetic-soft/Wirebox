@@ -5,18 +5,23 @@ declare(strict_types=1);
 namespace AsceticSoft\Wirebox\Tests\Unit;
 
 use AsceticSoft\Wirebox\ContainerBuilder;
+use AsceticSoft\Wirebox\Exception\ContainerException;
 use AsceticSoft\Wirebox\Tests\Fixtures\DatabaseLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\ExcludedService;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\LoggerInterface;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\SomeInterface;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithDeps;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithInject;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithParam;
 use AsceticSoft\Wirebox\Tests\Fixtures\SimpleService;
 use AsceticSoft\Wirebox\Tests\Fixtures\TransientService;
+use AsceticSoft\Wirebox\Tests\FixturesAmbiguous\PaymentInterface;
+use AsceticSoft\Wirebox\Tests\FixturesAmbiguous\StripePayment;
 use PHPUnit\Framework\TestCase;
 use AsceticSoft\Wirebox\Tests\Fixtures\Scan\ConcreteClass;
 use AsceticSoft\Wirebox\Tests\Fixtures\Scan\Sub\SubConcreteClass;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\BogusNamespace\NonLoadable;
 
 final class ContainerBuilderTest extends TestCase
 {
@@ -222,10 +227,10 @@ final class ContainerBuilderTest extends TestCase
         $bindings = $builder->getBindings();
 
         // SomeInterface has only one implementation (ConcreteClass), so it should be auto-bound
-        self::assertArrayHasKey(\AsceticSoft\Wirebox\Tests\Fixtures\Scan\SomeInterface::class, $bindings);
+        self::assertArrayHasKey(SomeInterface::class, $bindings);
         self::assertSame(
-            \AsceticSoft\Wirebox\Tests\Fixtures\Scan\ConcreteClass::class,
-            $bindings[\AsceticSoft\Wirebox\Tests\Fixtures\Scan\SomeInterface::class],
+            ConcreteClass::class,
+            $bindings[SomeInterface::class],
         );
     }
 
@@ -238,7 +243,7 @@ final class ContainerBuilderTest extends TestCase
         $builder = new ContainerBuilder($this->tmpDir);
         $builder->scan(__DIR__ . '/../FixturesAmbiguous');
 
-        $this->expectException(\AsceticSoft\Wirebox\Exception\ContainerException::class);
+        $this->expectException(ContainerException::class);
         $this->expectExceptionMessageMatches('/Ambiguous auto-binding.*PaymentInterface/');
 
         $builder->build();
@@ -256,7 +261,7 @@ final class ContainerBuilderTest extends TestCase
         try {
             $builder->build();
             self::fail('Expected ContainerException was not thrown');
-        } catch (\AsceticSoft\Wirebox\Exception\ContainerException $e) {
+        } catch (ContainerException $e) {
             $message = $e->getMessage();
             self::assertStringContainsString('PaymentInterface', $message);
             self::assertStringContainsString('PayPalPayment', $message);
@@ -274,14 +279,14 @@ final class ContainerBuilderTest extends TestCase
         $builder = new ContainerBuilder($this->tmpDir);
         $builder->scan(__DIR__ . '/../FixturesAmbiguous');
         $builder->bind(
-            \AsceticSoft\Wirebox\Tests\FixturesAmbiguous\PaymentInterface::class,
-            \AsceticSoft\Wirebox\Tests\FixturesAmbiguous\StripePayment::class,
+            PaymentInterface::class,
+            StripePayment::class,
         );
 
         $container = $builder->build();
 
-        $payment = $container->get(\AsceticSoft\Wirebox\Tests\FixturesAmbiguous\PaymentInterface::class);
-        self::assertInstanceOf(\AsceticSoft\Wirebox\Tests\FixturesAmbiguous\StripePayment::class, $payment);
+        $payment = $container->get(PaymentInterface::class);
+        self::assertInstanceOf(StripePayment::class, $payment);
     }
 
     public function testExplicitBindOverridesAutoBind(): void
@@ -372,7 +377,7 @@ final class ContainerBuilderTest extends TestCase
         // NonLoadable.php has a wrong namespace (BogusNamespace), so class_exists() returns false
         // and it should be skipped
         self::assertArrayNotHasKey(
-            'AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\BogusNamespace\\NonLoadable',
+            NonLoadable::class,
             $definitions,
         );
     }

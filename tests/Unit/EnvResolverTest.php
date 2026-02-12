@@ -259,9 +259,7 @@ final class EnvResolverTest extends TestCase
 
             self::assertSame('from_server', $resolver->get('WIREBOX_TEST_SRV'));
         } finally {
-            if ($originalEnv === null) {
-                unset($_ENV['WIREBOX_TEST_SRV']);
-            } else {
+            if ($originalEnv !== null) {
                 $_ENV['WIREBOX_TEST_SRV'] = $originalEnv;
             }
             if ($originalServer === null) {

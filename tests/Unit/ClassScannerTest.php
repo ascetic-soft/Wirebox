@@ -6,6 +6,15 @@ namespace AsceticSoft\Wirebox\Tests\Unit;
 
 use AsceticSoft\Wirebox\Scanner\ClassScanner;
 use PHPUnit\Framework\TestCase;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\WithAttributedAnonymous;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\BogusNamespace\NonLoadable;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\Sub\SubConcreteClass;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\WithAnonymousClass;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\ConcreteClass;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\WithDoubleColon;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\SomeEnum;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\SomeInterface;
+use AsceticSoft\Wirebox\Tests\Fixtures\Scan\AbstractClass;
 
 final class ClassScannerTest extends TestCase
 {
@@ -21,22 +30,22 @@ final class ClassScannerTest extends TestCase
         $classes = $this->scanner->scan(__DIR__ . '/../Fixtures/Scan');
 
         // Should find ConcreteClass and SubConcreteClass
-        self::assertContains('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\ConcreteClass', $classes);
-        self::assertContains('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\Sub\\SubConcreteClass', $classes);
+        self::assertContains(ConcreteClass::class, $classes);
+        self::assertContains(SubConcreteClass::class, $classes);
 
         // Should NOT find abstract, interface, trait, enum
-        self::assertNotContains('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\AbstractClass', $classes);
-        self::assertNotContains('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\SomeInterface', $classes);
+        self::assertNotContains(AbstractClass::class, $classes);
+        self::assertNotContains(SomeInterface::class, $classes);
         self::assertNotContains('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\SomeTrait', $classes);
-        self::assertNotContains('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\SomeEnum', $classes);
+        self::assertNotContains(SomeEnum::class, $classes);
     }
 
     public function testExcludePattern(): void
     {
         $classes = $this->scanner->scan(__DIR__ . '/../Fixtures/Scan', ['Sub/*']);
 
-        self::assertContains('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\ConcreteClass', $classes);
-        self::assertNotContains('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\Sub\\SubConcreteClass', $classes);
+        self::assertContains(ConcreteClass::class, $classes);
+        self::assertNotContains(SubConcreteClass::class, $classes);
     }
 
     public function testThrowsOnInvalidDirectory(): void
@@ -61,10 +70,10 @@ final class ClassScannerTest extends TestCase
         $classes = $this->scanner->scan(__DIR__ . '/../Fixtures/Scan');
 
         // WithDoubleColon class should be found
-        self::assertContains('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\WithDoubleColon', $classes);
+        self::assertContains(WithDoubleColon::class, $classes);
 
         // ConcreteClass::class inside WithDoubleColon should NOT produce a duplicate
-        $concreteCount = \array_count_values($classes)['AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\ConcreteClass'] ?? 0;
+        $concreteCount = \array_count_values($classes)[ConcreteClass::class] ?? 0;
         self::assertSame(1, $concreteCount);
     }
 
@@ -73,7 +82,7 @@ final class ClassScannerTest extends TestCase
         $classes = $this->scanner->scan(__DIR__ . '/../Fixtures/Scan');
 
         // The named class should be found
-        self::assertContains('AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\WithAnonymousClass', $classes);
+        self::assertContains(WithAnonymousClass::class, $classes);
 
         // No anonymous class artifacts should be in the list
         foreach ($classes as $class) {
@@ -88,7 +97,7 @@ final class ClassScannerTest extends TestCase
         $classes = $this->scanner->scan(__DIR__ . '/../Fixtures/Scan', ['SubConcreteClass.php']);
 
         self::assertNotContains(
-            'AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\Sub\\SubConcreteClass',
+            SubConcreteClass::class,
             $classes,
         );
     }
@@ -99,7 +108,7 @@ final class ClassScannerTest extends TestCase
         $classes = $this->scanner->scan(__DIR__ . '/../Fixtures/Scan');
 
         self::assertContains(
-            'AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\BogusNamespace\\NonLoadable',
+            NonLoadable::class,
             $classes,
         );
     }
@@ -110,7 +119,7 @@ final class ClassScannerTest extends TestCase
 
         // The named class should be found
         self::assertContains(
-            'AsceticSoft\\Wirebox\\Tests\\Fixtures\\Scan\\WithAttributedAnonymous',
+            WithAttributedAnonymous::class,
             $classes,
         );
     }
