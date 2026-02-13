@@ -20,6 +20,7 @@ Lightweight PHP 8.4 DI Container with Autowiring, Attributes & Compiled Containe
 
 [Get Started]({{ '/docs/getting-started.html' | relative_url }}){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [Русский]({{ '/ru/' | relative_url }}){: .btn .btn-outline .fs-5 .mb-4 .mb-md-0 .mr-2 }
+[中文]({{ '/zh/' | relative_url }}){: .btn .btn-outline .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [View on GitHub](https://github.com/ascetic-soft/Wirebox){: .btn .fs-5 .mb-4 .mb-md-0 }
 
 ---

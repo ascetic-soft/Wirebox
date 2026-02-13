@@ -9,6 +9,8 @@ color_scheme: light
 aux_links:
   "Русский":
     - "/Wirebox/ru/"
+  "中文":
+    - "/Wirebox/zh/"
   "GitHub":
     - "https://github.com/ascetic-soft/Wirebox"
   "Packagist":
