@@ -4,8 +4,21 @@ declare(strict_types=1);
 
 namespace AsceticSoft\Wirebox\Tests\Unit;
 
+use AsceticSoft\Wirebox\AutoconfigureRule;
 use AsceticSoft\Wirebox\ContainerBuilder;
 use AsceticSoft\Wirebox\Exception\ContainerException;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\AsScheduled;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\CleanupTask;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\CommandHandlerInterface;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\CreateUserHandler;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\DailyReportTask;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\DeleteUserHandler;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\EventListenerInterface;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\GetUserHandler;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\OrderCreatedListener;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\PlainService;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\QueryHandlerInterface;
+use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\UserCreatedListener;
 use AsceticSoft\Wirebox\Tests\Fixtures\DatabaseLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\ExcludedService;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
@@ -408,5 +421,230 @@ final class ContainerBuilderTest extends TestCase
             NonLoadable::class,
             $definitions,
         );
+    }
+
+    // --- Autoconfiguration tests ---
+
+    public function testRegisterForAutoconfigurationReturnsSameRule(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        $rule1 = $builder->registerForAutoconfiguration(EventListenerInterface::class);
+        $rule2 = $builder->registerForAutoconfiguration(EventListenerInterface::class);
+
+        self::assertSame($rule1, $rule2);
+        self::assertInstanceOf(AutoconfigureRule::class, $rule1);
+    }
+
+    public function testProgrammaticAutoconfigurationByInterface(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        // Add an extra tag programmatically on top of the declarative #[AutoconfigureTag('event.listener')]
+        $builder->registerForAutoconfiguration(EventListenerInterface::class)
+            ->tag('extra.listener.tag');
+
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $container = $builder->build();
+
+        // Declarative tag from #[AutoconfigureTag] on the interface
+        $listeners = \iterator_to_array($container->getTagged('event.listener'));
+        self::assertCount(2, $listeners);
+
+        $classes = \array_map(fn ($obj) => $obj::class, $listeners);
+        self::assertContains(UserCreatedListener::class, $classes);
+        self::assertContains(OrderCreatedListener::class, $classes);
+
+        // Programmatic tag added via registerForAutoconfiguration()
+        $extraListeners = \iterator_to_array($container->getTagged('extra.listener.tag'));
+        self::assertCount(2, $extraListeners);
+    }
+
+    public function testProgrammaticAutoconfigurationByAttribute(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->registerForAutoconfiguration(AsScheduled::class)
+            ->tag('programmatic.scheduled');
+
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $container = $builder->build();
+
+        $tasks = \iterator_to_array($container->getTagged('programmatic.scheduled'));
+
+        self::assertCount(2, $tasks);
+
+        $classes = \array_map(fn ($obj) => $obj::class, $tasks);
+        self::assertContains(DailyReportTask::class, $classes);
+        self::assertContains(CleanupTask::class, $classes);
+    }
+
+    public function testDeclarativeAutoconfigureTagOnInterface(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        // No explicit registerForAutoconfiguration — the interface has #[AutoconfigureTag]
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $container = $builder->build();
+
+        $handlers = \iterator_to_array($container->getTagged('command.handler'));
+
+        self::assertCount(2, $handlers);
+
+        $classes = \array_map(fn ($obj) => $obj::class, $handlers);
+        self::assertContains(CreateUserHandler::class, $classes);
+        self::assertContains(DeleteUserHandler::class, $classes);
+    }
+
+    public function testDeclarativeAutoconfigureTagOnCustomAttribute(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        // No explicit registerForAutoconfiguration — the #[AsScheduled] attribute has #[AutoconfigureTag]
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $container = $builder->build();
+
+        $tasks = \iterator_to_array($container->getTagged('scheduler.task'));
+
+        self::assertCount(2, $tasks);
+
+        $classes = \array_map(fn ($obj) => $obj::class, $tasks);
+        self::assertContains(DailyReportTask::class, $classes);
+        self::assertContains(CleanupTask::class, $classes);
+    }
+
+    public function testAutoconfigurationDoesNotAffectPlainServices(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->registerForAutoconfiguration(EventListenerInterface::class)
+            ->tag('event.listener');
+
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $definitions = $builder->getDefinitions();
+
+        // PlainService should have no tags
+        self::assertArrayHasKey(PlainService::class, $definitions);
+        self::assertEmpty($definitions[PlainService::class]->getTags());
+    }
+
+    public function testProgrammaticAutoconfigurationAppliesLifetime(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->registerForAutoconfiguration(EventListenerInterface::class)
+            ->tag('event.listener')
+            ->transient();
+
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $container = $builder->build();
+
+        $a = $container->get(UserCreatedListener::class);
+        $b = $container->get(UserCreatedListener::class);
+
+        self::assertNotSame($a, $b);
+    }
+
+    public function testProgrammaticAutoconfigurationAppliesSingleton(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->registerForAutoconfiguration(EventListenerInterface::class)
+            ->singleton();
+
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $container = $builder->build();
+
+        $a = $container->get(UserCreatedListener::class);
+        $b = $container->get(UserCreatedListener::class);
+
+        self::assertSame($a, $b);
+    }
+
+    public function testProgrammaticAutoconfigurationAppliesLazy(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->registerForAutoconfiguration(EventListenerInterface::class)
+            ->lazy();
+
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $definitions = $builder->getDefinitions();
+
+        self::assertTrue($definitions[UserCreatedListener::class]->isLazy());
+        self::assertTrue($definitions[OrderCreatedListener::class]->isLazy());
+    }
+
+    /**
+     * CQRS-style end-to-end test: command and query handlers
+     * are auto-tagged via #[AutoconfigureTag] on their interfaces.
+     */
+    public function testCqrsHandlersAutoTagged(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $container = $builder->build();
+
+        // Command handlers
+        $commandHandlers = \iterator_to_array($container->getTagged('command.handler'));
+        self::assertCount(2, $commandHandlers);
+
+        $commandClasses = \array_map(fn ($obj) => $obj::class, $commandHandlers);
+        self::assertContains(CreateUserHandler::class, $commandClasses);
+        self::assertContains(DeleteUserHandler::class, $commandClasses);
+
+        // Query handlers
+        $queryHandlers = \iterator_to_array($container->getTagged('query.handler'));
+        self::assertCount(1, $queryHandlers);
+        self::assertInstanceOf(GetUserHandler::class, $queryHandlers[0]);
+    }
+
+    public function testProgrammaticAndDeclarativeAutoconfigureCombine(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        // Programmatically add 'extra.tag' to all CommandHandlerInterface implementations
+        $builder->registerForAutoconfiguration(CommandHandlerInterface::class)
+            ->tag('extra.tag');
+
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $container = $builder->build();
+
+        // Should have both 'command.handler' (from interface #[AutoconfigureTag])
+        // and 'extra.tag' (from programmatic rule)
+        $definitions = $builder->getDefinitions();
+        $tags = $definitions[CreateUserHandler::class]->getTags();
+
+        self::assertContains('command.handler', $tags);
+        self::assertContains('extra.tag', $tags);
+
+        // Verify via getTagged as well
+        $extraTagged = \iterator_to_array($container->getTagged('extra.tag'));
+        self::assertCount(2, $extraTagged);
+    }
+
+    /**
+     * Autoconfigured interfaces (via #[AutoconfigureTag] or registerForAutoconfiguration())
+     * must not trigger the ambiguous auto-binding error, even when multiple
+     * implementations exist.
+     */
+    public function testAutoconfiguredInterfacesSkipAmbiguousBindingCheck(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        // CommandHandlerInterface has #[AutoconfigureTag] and 2 implementations — no error
+        // EventListenerInterface is registered programmatically and has 2 implementations — no error
+        $builder->registerForAutoconfiguration(EventListenerInterface::class)
+            ->tag('event.listener');
+
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        // build() must succeed without explicit bind() for these interfaces
+        $container = $builder->build();
+
+        self::assertCount(2, \iterator_to_array($container->getTagged('command.handler')));
+        self::assertCount(2, \iterator_to_array($container->getTagged('event.listener')));
     }
 }

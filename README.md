@@ -15,7 +15,8 @@ Lightweight PHP 8.4 DI container with autowiring, directory scanning, PHP attrib
 - **PSR-11** compatible (`Psr\Container\ContainerInterface`)
 - **Autowiring** — automatic constructor dependency resolution via reflection
 - **Directory scanning** — point at a directory, all classes are auto-registered
-- **PHP Attributes** — `#[Inject]`, `#[Singleton]`, `#[Transient]`, `#[Lazy]`, `#[Tag]`, `#[Param]`, `#[Exclude]`
+- **PHP Attributes** — `#[Inject]`, `#[Singleton]`, `#[Transient]`, `#[Lazy]`, `#[Tag]`, `#[Param]`, `#[Exclude]`, `#[AutoconfigureTag]`
+- **Autoconfiguration** — automatically tag services by interface or attribute (Symfony-style)
 - **Dotenv** — built-in `.env` parser with 3-level priority (no external dependencies)
 - **Tagged services** — group services by tag and retrieve them as a collection
 - **Lazy proxies** — deferred instantiation via PHP 8.4 native lazy objects
@@ -271,6 +272,133 @@ Retrieve tagged services:
 ```php
 foreach ($container->getTagged('event.listener') as $listener) {
     $listener->handle($event);
+}
+```
+
+### `#[AutoconfigureTag]`
+
+Automatically tag all classes that implement an interface or are decorated with a custom attribute. Place `#[AutoconfigureTag]` on the interface or attribute class.
+
+On an **interface** — all implementing classes receive the tag:
+
+```php
+use AsceticSoft\Wirebox\Attribute\AutoconfigureTag;
+
+#[AutoconfigureTag('command.handler')]
+interface CommandHandlerInterface
+{
+    public function __invoke(object $command): void;
+}
+
+// Automatically receives the 'command.handler' tag when scanned
+class CreateUserHandler implements CommandHandlerInterface
+{
+    public function __invoke(object $command): void
+    {
+        // ...
+    }
+}
+```
+
+On a **custom attribute** — all classes decorated with that attribute receive the tag:
+
+```php
+use AsceticSoft\Wirebox\Attribute\AutoconfigureTag;
+
+#[Attribute(Attribute::TARGET_CLASS)]
+#[AutoconfigureTag('scheduler.task')]
+class AsScheduled {}
+
+// Automatically receives the 'scheduler.task' tag when scanned
+#[AsScheduled]
+class DailyReportTask
+{
+    public function run(): void { /* ... */ }
+}
+```
+
+Repeatable — multiple tags can be applied:
+
+```php
+#[AutoconfigureTag('command.handler')]
+#[AutoconfigureTag('auditable')]
+interface CommandHandlerInterface {}
+```
+
+### Programmatic Autoconfiguration
+
+For more control (lifetime, lazy, multiple tags), use `registerForAutoconfiguration()` on the builder:
+
+```php
+$builder->registerForAutoconfiguration(EventListenerInterface::class)
+    ->tag('event.listener')
+    ->singleton()
+    ->lazy();
+```
+
+Any class implementing `EventListenerInterface` found during `scan()` will automatically get the `event.listener` tag, be configured as a singleton, and use lazy proxies.
+
+This also works with attributes:
+
+```php
+$builder->registerForAutoconfiguration(AsScheduled::class)
+    ->tag('scheduler.task')
+    ->transient();
+```
+
+### CQRS Example
+
+Autoconfiguration makes it easy to set up command and query handlers:
+
+```php
+use AsceticSoft\Wirebox\Attribute\AutoconfigureTag;
+
+#[AutoconfigureTag('command.handler')]
+interface CommandHandlerInterface
+{
+    public function __invoke(object $command): void;
+}
+
+#[AutoconfigureTag('query.handler')]
+interface QueryHandlerInterface
+{
+    public function __invoke(object $query): mixed;
+}
+
+// Handlers — no manual tagging needed
+class CreateUserHandler implements CommandHandlerInterface
+{
+    public function __invoke(object $command): void { /* ... */ }
+}
+
+class DeleteUserHandler implements CommandHandlerInterface
+{
+    public function __invoke(object $command): void { /* ... */ }
+}
+
+class GetUserHandler implements QueryHandlerInterface
+{
+    public function __invoke(object $query): mixed { /* ... */ }
+}
+```
+
+Build and retrieve. Autoconfigured interfaces are excluded from the ambiguous auto-binding check, so multiple implementations work seamlessly:
+
+```php
+$builder = new ContainerBuilder(projectDir: __DIR__);
+$builder->scan(__DIR__ . '/src');
+
+// No need for bind() — CommandHandlerInterface is autoconfigured
+$container = $builder->build();
+
+// Iterate all command handlers
+foreach ($container->getTagged('command.handler') as $handler) {
+    // CreateUserHandler, DeleteUserHandler
+}
+
+// Iterate all query handlers
+foreach ($container->getTagged('query.handler') as $handler) {
+    // GetUserHandler
 }
 ```
 

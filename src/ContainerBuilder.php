@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AsceticSoft\Wirebox;
 
+use AsceticSoft\Wirebox\Attribute\AutoconfigureTag;
 use AsceticSoft\Wirebox\Attribute\Exclude;
 use AsceticSoft\Wirebox\Attribute\Lazy as LazyAttr;
 use AsceticSoft\Wirebox\Attribute\Tag as TagAttr;
@@ -29,6 +30,9 @@ final class ContainerBuilder
     /** @var array<string, list<string>> Interface -> implementations (tracked when ambiguous) */
     private array $ambiguousBindings = [];
 
+    /** @var array<class-string, AutoconfigureRule> Target class/interface/attribute -> rule */
+    private array $autoconfiguration = [];
+
     /** @var list<string> Glob patterns to exclude from scanning */
     private array $excludePatterns = [];
 
@@ -51,6 +55,10 @@ final class ContainerBuilder
      * If multiple implementations are found for the same interface,
      * the binding is marked as ambiguous and build() will throw
      * a ContainerException unless resolved with an explicit bind().
+     *
+     * Autoconfigured interfaces (via #[AutoconfigureTag] or
+     * registerForAutoconfiguration()) are excluded from the ambiguous
+     * binding check — they are expected to have multiple implementations.
      */
     public function scan(string $directory): self
     {
@@ -94,6 +102,9 @@ final class ContainerBuilder
                 $definition->tag($tag->name);
             }
 
+            // Apply autoconfiguration rules
+            $this->applyAutoconfiguration($ref, $definition);
+
             $this->definitions[$className] = $definition;
 
             // Register tags
@@ -101,9 +112,14 @@ final class ContainerBuilder
                 $this->tags[$tagName][] = $className;
             }
 
-            // Auto-bind: if the class implements exactly one interface, bind it
+            // Auto-bind: if the class implements exactly one interface, bind it.
+            // Autoconfigured interfaces are skipped — they are expected
+            // to have multiple implementations (e.g. CQRS handlers).
             $interfaces = $ref->getInterfaceNames();
             foreach ($interfaces as $interface) {
+                if ($this->isAutoconfiguredInterface($interface)) {
+                    continue;
+                }
                 // Only auto-bind if no explicit binding exists
                 if (isset($this->ambiguousBindings[$interface])) {
                     // Already marked as ambiguous — just add another implementation
@@ -131,6 +147,21 @@ final class ContainerBuilder
     {
         $this->excludePatterns[] = $pattern;
         return $this;
+    }
+
+    /**
+     * Register an autoconfiguration rule for services that implement
+     * the given interface or are decorated with the given attribute.
+     *
+     * During scan(), any class that implements $classOrInterface (if it is
+     * an interface) or is decorated with $classOrInterface (if it is an
+     * attribute) will have the returned rule applied to its definition.
+     *
+     * @param class-string $classOrInterface
+     */
+    public function registerForAutoconfiguration(string $classOrInterface): AutoconfigureRule
+    {
+        return $this->autoconfiguration[$classOrInterface] ??= new AutoconfigureRule();
     }
 
     /**
@@ -245,5 +276,69 @@ final class ContainerBuilder
     private function resolveParameters(): array
     {
         return array_map(fn ($value) => $this->envResolver->resolveParameter($value), $this->parameters);
+    }
+
+    /**
+     * Check whether an interface is autoconfigured (programmatically
+     * or via #[AutoconfigureTag]) and thus should be excluded from
+     * the ambiguous auto-binding check.
+     */
+    private function isAutoconfiguredInterface(string $interface): bool
+    {
+        // 1. Programmatic: registered via registerForAutoconfiguration()
+        if (isset($this->autoconfiguration[$interface])) {
+            return true;
+        }
+
+        // 2. Declarative: interface has #[AutoconfigureTag]
+        if (\interface_exists($interface)) {
+            $ref = new \ReflectionClass($interface);
+            if ($ref->getAttributes(AutoconfigureTag::class) !== []) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Apply autoconfiguration rules to a definition based on
+     * the class's interfaces and attributes.
+     *
+     * Three sources of autoconfiguration:
+     * 1. Programmatic rules registered via registerForAutoconfiguration()
+     * 2. #[AutoconfigureTag] on interfaces the class implements
+     * 3. #[AutoconfigureTag] on attribute classes that decorate the class
+     *
+     * @param \ReflectionClass<object> $ref
+     */
+    private function applyAutoconfiguration(\ReflectionClass $ref, Definition $definition): void
+    {
+        // 1. Programmatic autoconfiguration rules
+        foreach ($this->autoconfiguration as $target => $rule) {
+            // Check if the class implements the target interface
+            if (\interface_exists($target) && $ref->implementsInterface($target)) {
+                $rule->apply($definition);
+            }
+            // Check if the class has the target attribute
+            if ($ref->getAttributes($target) !== []) {
+                $rule->apply($definition);
+            }
+        }
+
+        // 2. Declarative #[AutoconfigureTag] on interfaces
+        foreach ($ref->getInterfaces() as $iface) {
+            foreach ($iface->getAttributes(AutoconfigureTag::class) as $attr) {
+                $definition->tag($attr->newInstance()->name);
+            }
+        }
+
+        // 3. Declarative #[AutoconfigureTag] on custom attributes
+        foreach ($ref->getAttributes() as $classAttr) {
+            $attrRef = new \ReflectionClass($classAttr->getName());
+            foreach ($attrRef->getAttributes(AutoconfigureTag::class) as $attr) {
+                $definition->tag($attr->newInstance()->name);
+            }
+        }
     }
 }
