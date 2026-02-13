@@ -18,7 +18,7 @@ Lightweight PHP 8.4 DI Container with Autowiring, Attributes & Compiled Containe
 [![PHP Version](https://img.shields.io/packagist/dependency-v/ascetic-soft/wirebox/php)](https://packagist.org/packages/ascetic-soft/wirebox)
 [![License](https://img.shields.io/packagist/l/ascetic-soft/wirebox)](https://packagist.org/packages/ascetic-soft/wirebox)
 
-[Get Started]({% link docs/getting-started.md %}){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
+[Get Started]({{ '/docs/getting-started.html' | relative_url }}){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [View on GitHub](https://github.com/ascetic-soft/Wirebox){: .btn .fs-5 .mb-4 .mb-md-0 }
 
 ---
@@ -87,31 +87,31 @@ composer require ascetic-soft/wirebox
 
 <div class="grid-container">
   <div class="grid-item">
-    <h3><a href="{% link docs/getting-started.md %}">Getting Started</a></h3>
+    <h3><a href="{{ '/docs/getting-started.html' | relative_url }}">Getting Started</a></h3>
     <p>Installation, first container, and basic usage in 5 minutes.</p>
   </div>
   <div class="grid-item">
-    <h3><a href="{% link docs/configuration.md %}">Configuration</a></h3>
+    <h3><a href="{{ '/docs/configuration.html' | relative_url }}">Configuration</a></h3>
     <p>Directory scanning, bindings, factories, and fluent API.</p>
   </div>
   <div class="grid-item">
-    <h3><a href="{% link docs/attributes.md %}">Attributes</a></h3>
+    <h3><a href="{{ '/docs/attributes.html' | relative_url }}">Attributes</a></h3>
     <p>All PHP attributes: Singleton, Transient, Inject, Param, Tag, and more.</p>
   </div>
   <div class="grid-item">
-    <h3><a href="{% link docs/environment.md %}">Environment Variables</a></h3>
+    <h3><a href="{{ '/docs/environment.html' | relative_url }}">Environment Variables</a></h3>
     <p>Built-in dotenv, 3-level priority, type casting.</p>
   </div>
   <div class="grid-item">
-    <h3><a href="{% link docs/compiled-container.md %}">Compiled Container</a></h3>
+    <h3><a href="{{ '/docs/compiled-container.html' | relative_url }}">Compiled Container</a></h3>
     <p>Zero-reflection production container generation.</p>
   </div>
   <div class="grid-item">
-    <h3><a href="{% link docs/advanced.md %}">Advanced</a></h3>
+    <h3><a href="{{ '/docs/advanced.html' | relative_url }}">Advanced</a></h3>
     <p>Autoconfiguration, tagged services, lazy proxies, circular dependencies.</p>
   </div>
   <div class="grid-item">
-    <h3><a href="{% link docs/api-reference.md %}">API Reference</a></h3>
+    <h3><a href="{{ '/docs/api-reference.html' | relative_url }}">API Reference</a></h3>
     <p>Complete reference for all public classes and methods.</p>
   </div>
 </div>

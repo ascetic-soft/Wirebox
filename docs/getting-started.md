@@ -246,8 +246,8 @@ $app->run();
 
 ## What's Next?
 
-- [Configuration]({% link docs/configuration.md %}) — Learn about directory scanning, bindings, factories, and the fluent API
-- [Attributes]({% link docs/attributes.md %}) — Full reference for all PHP attributes
-- [Environment Variables]({% link docs/environment.md %}) — Deep dive into dotenv support and type casting
-- [Compiled Container]({% link docs/compiled-container.md %}) — Optimize for production with zero-reflection containers
-- [Advanced Features]({% link docs/advanced.md %}) — Autoconfiguration, tagged services, lazy proxies, and more
+- [Configuration]({{ '/docs/configuration.html' | relative_url }}) — Learn about directory scanning, bindings, factories, and the fluent API
+- [Attributes]({{ '/docs/attributes.html' | relative_url }}) — Full reference for all PHP attributes
+- [Environment Variables]({{ '/docs/environment.html' | relative_url }}) — Deep dive into dotenv support and type casting
+- [Compiled Container]({{ '/docs/compiled-container.html' | relative_url }}) — Optimize for production with zero-reflection containers
+- [Advanced Features]({{ '/docs/advanced.html' | relative_url }}) — Autoconfiguration, tagged services, lazy proxies, and more

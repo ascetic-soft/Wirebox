@@ -82,7 +82,7 @@ $builder->bind(PaymentInterface::class, StripePayment::class);
 ```
 
 {: .note }
-Interfaces marked with `#[AutoconfigureTag]` are excluded from the ambiguous binding check, since multiple implementations are expected. See [Autoconfiguration]({% link docs/advanced.md %}#autoconfiguration).
+Interfaces marked with `#[AutoconfigureTag]` are excluded from the ambiguous binding check, since multiple implementations are expected. See [Autoconfiguration]({{ '/docs/advanced.html' | relative_url }}#autoconfiguration).
 
 ---
 
@@ -216,7 +216,7 @@ $builder->defaultLazy(false);
 
 When disabled, services are created eagerly unless explicitly marked with `#[Lazy]`.
 
-See [Lazy Proxies]({% link docs/advanced.md %}#lazy-proxies) for details.
+See [Lazy Proxies]({{ '/docs/advanced.html' | relative_url }}#lazy-proxies) for details.
 
 ---
 
@@ -240,7 +240,7 @@ The `build()` method:
 
 ## Next Steps
 
-- [Attributes]({% link docs/attributes.md %}) — Declarative configuration with PHP attributes
-- [Environment Variables]({% link docs/environment.md %}) — Dotenv support and priority levels
-- [Compiled Container]({% link docs/compiled-container.md %}) — Production optimization
-- [Advanced Features]({% link docs/advanced.md %}) — Autoconfiguration, tags, lazy proxies
+- [Attributes]({{ '/docs/attributes.html' | relative_url }}) — Declarative configuration with PHP attributes
+- [Environment Variables]({{ '/docs/environment.html' | relative_url }}) — Dotenv support and priority levels
+- [Compiled Container]({{ '/docs/compiled-container.html' | relative_url }}) — Production optimization
+- [Advanced Features]({{ '/docs/advanced.html' | relative_url }}) — Autoconfiguration, tags, lazy proxies

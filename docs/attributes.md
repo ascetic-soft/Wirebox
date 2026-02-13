@@ -258,7 +258,7 @@ interface CommandHandlerInterface {}
 {: .note }
 Interfaces with `#[AutoconfigureTag]` are excluded from ambiguous auto-binding checks, since multiple implementations are expected.
 
-See also [Autoconfiguration]({% link docs/advanced.md %}#autoconfiguration) for programmatic autoconfiguration.
+See also [Autoconfiguration]({{ '/docs/advanced.html' | relative_url }}#autoconfiguration) for programmatic autoconfiguration.
 
 ---
 
@@ -319,7 +319,7 @@ class DatabaseService
 {: .tip }
 `#[Param]` reads directly from environment variables (using the 3-level priority system). It's the simplest way to inject configuration values.
 
-See [Environment Variables]({% link docs/environment.md %}) for details on the resolution order.
+See [Environment Variables]({{ '/docs/environment.html' | relative_url }}) for details on the resolution order.
 
 ---
 
