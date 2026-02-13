@@ -4,6 +4,43 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.0] - 2026-02-13
+
+### Added
+- **Build-time circular dependency detection.** `build()` and `compile()` now analyse the dependency graph and throw `CircularDependencyException` for unsafe cycles before the container is created. A cycle is safe only when all services in it are lazy singletons; eager services or lazy transients are reported with a detailed hint.
+- `#[Eager]` attribute documentation in README — opt out of lazy instantiation per class.
+- Default lazy mode documentation in README — `ContainerBuilder` enables lazy proxies by default.
+- New "Circular Dependencies" section in README explaining safe/unsafe cycles with examples.
+- `CircularDependencyException` now accepts an optional `$hint` parameter for descriptive error messages (backward compatible).
+- 11 new tests covering all circular dependency scenarios: eager cycles, lazy singleton (safe), lazy transient, mixed lazy/eager, mixed singleton/transient, factory skip, compile path, default-lazy inheritance, and full runtime E2E verification.
+
+### Changed
+- `ContainerBuilder::build()` calls `detectUnsafeCircularDependencies()` after `resolveDefaultLazy()`.
+- `ContainerBuilder::compile()` calls `detectUnsafeCircularDependencies()` after `resolveDefaultLazy()`.
+- Error Handling table in README updated with more precise descriptions.
+
+## [1.1.1] - 2026-02-12
+
+### Added
+- **Lazy proxy support.** Deferred instantiation via PHP 8.4 native `ReflectionClass::newLazyProxy()`. A lightweight proxy is returned immediately; the real instance is created only on first property/method access.
+- `#[Lazy]` attribute — mark a class for lazy instantiation.
+- `#[Eager]` attribute — opt out of lazy mode when the container's `defaultLazy` is enabled.
+- `Definition::lazy()` / `Definition::eager()` / `Definition::hasExplicitLazy()` fluent API.
+- `ContainerBuilder::defaultLazy()` — toggle default lazy mode (enabled by default in the builder).
+- Lazy proxies fully supported in the compiled container (`ContainerCompiler`).
+- **Autoconfiguration.** Automatically tag and configure services by interface or attribute (Symfony-style).
+- `#[AutoconfigureTag]` attribute — place on an interface or custom attribute to auto-tag all implementing/decorated classes.
+- `AutoconfigureRule` class with fluent API (`tag()`, `singleton()`, `transient()`, `lazy()`, `eager()`).
+- `ContainerBuilder::registerForAutoconfiguration()` — programmatic autoconfiguration rules.
+- Autoconfigured interfaces are excluded from ambiguous auto-binding checks (multiple implementations are expected).
+- Test fixtures: `LazyService`, `LazyServiceWithDeps`, `LazyTransientService`, and full `FixturesAutoconfigure/` directory with CQRS-style handlers, event listeners, and scheduled tasks.
+- Comprehensive test coverage for lazy proxies (container, builder, compiler) and autoconfiguration.
+
+### Changed
+- `Container::autowireClass()` now reads `#[Lazy]`, `#[Eager]`, and `#[Transient]` attributes and creates proxies accordingly.
+- `ContainerBuilder::scan()` reads `#[Lazy]` and `#[Eager]` attributes and applies autoconfiguration rules.
+- `ContainerBuilder::build()` / `compile()` apply `resolveDefaultLazy()` to set the lazy flag on definitions without an explicit setting.
+
 ## [1.1.0] - 2025-02-12
 
 ### Added

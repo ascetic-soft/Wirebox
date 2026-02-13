@@ -15,14 +15,14 @@ Lightweight PHP 8.4 DI container with autowiring, directory scanning, PHP attrib
 - **PSR-11** compatible (`Psr\Container\ContainerInterface`)
 - **Autowiring** — automatic constructor dependency resolution via reflection
 - **Directory scanning** — point at a directory, all classes are auto-registered
-- **PHP Attributes** — `#[Inject]`, `#[Singleton]`, `#[Transient]`, `#[Lazy]`, `#[Tag]`, `#[Param]`, `#[Exclude]`, `#[AutoconfigureTag]`
+- **PHP Attributes** — `#[Inject]`, `#[Singleton]`, `#[Transient]`, `#[Lazy]`, `#[Eager]`, `#[Tag]`, `#[Param]`, `#[Exclude]`, `#[AutoconfigureTag]`
 - **Autoconfiguration** — automatically tag services by interface or attribute (Symfony-style)
 - **Dotenv** — built-in `.env` parser with 3-level priority (no external dependencies)
 - **Tagged services** — group services by tag and retrieve them as a collection
 - **Lazy proxies** — deferred instantiation via PHP 8.4 native lazy objects
 - **Compiled container** — generate a PHP class with zero reflection at runtime
 - **Setter injection** — configure method calls on services after instantiation
-- **Circular dependency detection** — clear error messages with the full dependency chain
+- **Circular dependency detection** — unsafe cycles detected at build time with clear error messages
 
 ## Requirements
 
@@ -252,6 +252,34 @@ $builder->register(HeavyReportGenerator::class)->lazy();
 ```
 
 Lazy proxies are fully supported by the compiled container.
+
+#### Default lazy mode
+
+`ContainerBuilder` enables lazy mode by default — all services without an explicit `#[Lazy]` or `#[Eager]` attribute are created as lazy proxies. You can disable this:
+
+```php
+$builder->defaultLazy(false);
+```
+
+### `#[Eager]`
+
+Opt out of lazy instantiation when the container's default lazy mode is enabled:
+
+```php
+use AsceticSoft\Wirebox\Attribute\Eager;
+
+#[Eager]
+class AppConfig
+{
+    // Always created immediately, even when defaultLazy is on
+}
+```
+
+The same behavior is available via the fluent API:
+
+```php
+$builder->register(AppConfig::class)->eager();
+```
 
 ### `#[Tag]`
 
@@ -524,16 +552,61 @@ The compiled container:
 - Supports singleton caching, bindings, parameters, and tags
 - Does **not** support factory closures (they require runtime evaluation)
 
+## Circular Dependencies
+
+Wirebox detects circular dependencies **at build time** (`build()` / `compile()`) and throws `CircularDependencyException` for unsafe cycles before the container is ever used.
+
+### When is a cycle safe?
+
+A circular dependency is safe **only** when **all** services in the cycle are **lazy singletons**. The proxy is cached before real instantiation begins, so when the dependency chain loops back, it finds the proxy in the cache instead of re-entering construction:
+
+```php
+// Safe — both are lazy singletons (the default)
+#[Lazy]
+class ServiceA
+{
+    public function __construct(public readonly ServiceB $b) {}
+}
+
+#[Lazy]
+class ServiceB
+{
+    public function __construct(public readonly ServiceA $a) {}
+}
+
+$container = $builder->build(); // OK
+$a = $container->get(ServiceA::class);
+assert($a->b->a === $a); // same proxy
+```
+
+### When is a cycle unsafe?
+
+| Scenario                          | Result                                              |
+|-----------------------------------|-----------------------------------------------------|
+| All services are lazy singletons  | Safe — proxy cached before instantiation            |
+| Any service is **eager**          | Unsafe — Autowirer hits the same class twice         |
+| Any service is **lazy transient** | Unsafe — proxy is not cached, infinite recursion     |
+
+Unsafe cycles are reported with a clear message:
+
+```
+Circular dependency detected: ServiceA -> ServiceB -> ServiceA.
+All services in a circular dependency must be lazy singletons.
+Unsafe: ServiceB (not lazy)
+```
+
+> **Note:** Factory-based definitions (`register(..., fn() => ...)`) are skipped during cycle analysis because their dependencies cannot be determined statically.
+
 ## Error Handling
 
 Wirebox throws specific exceptions for common issues:
 
-| Exception                     | When                                       |
-|-------------------------------|--------------------------------------------|
-| `NotFoundException`           | Service not found and cannot be auto-wired |
-| `AutowireException`           | Cannot resolve a constructor parameter     |
-| `CircularDependencyException` | A -> B -> A circular dependency detected   |
-| `ContainerException`          | General container error                    |
+| Exception                     | When                                                    |
+|-------------------------------|---------------------------------------------------------|
+| `NotFoundException`           | Service not found and cannot be auto-wired              |
+| `AutowireException`           | Cannot resolve a constructor parameter                  |
+| `CircularDependencyException` | Unsafe circular dependency detected at build or runtime |
+| `ContainerException`          | General container error (e.g. ambiguous bindings)       |
 
 All exceptions implement `Psr\Container\ContainerExceptionInterface`.
 
@@ -541,9 +614,9 @@ All exceptions implement `Psr\Container\ContainerExceptionInterface`.
 use AsceticSoft\Wirebox\Exception\CircularDependencyException;
 
 try {
-    $container->get(ServiceA::class);
+    $builder->build();
 } catch (CircularDependencyException $e) {
-    // "Circular dependency detected: ServiceA -> ServiceB -> ServiceA"
+    // "Circular dependency detected: ServiceA -> ServiceB -> ServiceA. ..."
     echo $e->getMessage();
 }
 ```

@@ -14,7 +14,7 @@ final class Definition
 {
     private Lifetime $lifetime = Lifetime::Singleton;
 
-    private bool $lazy = false;
+    private ?bool $lazy = null;
 
     /** @var list<string> */
     private array $tags = [];
@@ -59,6 +59,16 @@ final class Definition
     public function lazy(bool $lazy = true): self
     {
         $this->lazy = $lazy;
+        return $this;
+    }
+
+    /**
+     * Mark this service as eager (not lazy) — the real instance is created immediately.
+     * Use this to opt out of lazy instantiation when the container's default lazy mode is enabled.
+     */
+    public function eager(): self
+    {
+        $this->lazy = false;
         return $this;
     }
 
@@ -141,6 +151,15 @@ final class Definition
 
     public function isLazy(): bool
     {
-        return $this->lazy;
+        return $this->lazy ?? false;
+    }
+
+    /**
+     * Whether the lazy flag was explicitly set on this definition.
+     * When false, the container's default lazy setting should be applied.
+     */
+    public function hasExplicitLazy(): bool
+    {
+        return $this->lazy !== null;
     }
 }

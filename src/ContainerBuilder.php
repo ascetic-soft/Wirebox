@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace AsceticSoft\Wirebox;
 
 use AsceticSoft\Wirebox\Attribute\AutoconfigureTag;
+use AsceticSoft\Wirebox\Attribute\Eager as EagerAttr;
 use AsceticSoft\Wirebox\Attribute\Exclude;
+use AsceticSoft\Wirebox\Attribute\Inject as InjectAttr;
 use AsceticSoft\Wirebox\Attribute\Lazy as LazyAttr;
+use AsceticSoft\Wirebox\Attribute\Param as ParamAttr;
 use AsceticSoft\Wirebox\Attribute\Tag as TagAttr;
 use AsceticSoft\Wirebox\Attribute\Transient as TransientAttr;
 use AsceticSoft\Wirebox\Compiler\ContainerCompiler;
 use AsceticSoft\Wirebox\Env\EnvResolver;
+use AsceticSoft\Wirebox\Exception\CircularDependencyException;
 use AsceticSoft\Wirebox\Scanner\ClassScanner;
 
 final class ContainerBuilder
@@ -35,6 +39,9 @@ final class ContainerBuilder
 
     /** @var list<string> Glob patterns to exclude from scanning */
     private array $excludePatterns = [];
+
+    /** Whether services should be lazy by default (proxy returned, real instance created on first access) */
+    private bool $defaultLazy = true;
 
     private readonly ClassScanner $scanner;
 
@@ -89,9 +96,11 @@ final class ContainerBuilder
                 $definition->singleton();
             }
 
-            // Read #[Lazy] attribute
+            // Read #[Lazy] / #[Eager] attributes
             if ($ref->getAttributes(LazyAttr::class) !== []) {
                 $definition->lazy();
+            } elseif ($ref->getAttributes(EagerAttr::class) !== []) {
+                $definition->eager();
             }
 
             // Read #[Tag] attributes
@@ -146,6 +155,20 @@ final class ContainerBuilder
     public function exclude(string $pattern): self
     {
         $this->excludePatterns[] = $pattern;
+        return $this;
+    }
+
+    /**
+     * Set the default lazy behavior for all services.
+     *
+     * When enabled, all services without an explicit lazy/eager setting
+     * will be created as lazy proxies (real instance is deferred until first access).
+     *
+     * Enabled by default. Use defaultLazy(false) to disable.
+     */
+    public function defaultLazy(bool $lazy = true): self
+    {
+        $this->defaultLazy = $lazy;
         return $this;
     }
 
@@ -224,6 +247,8 @@ final class ContainerBuilder
             ));
         }
 
+        $this->resolveDefaultLazy();
+        $this->detectUnsafeCircularDependencies();
         $resolvedParams = $this->resolveParameters();
 
         return new Container(
@@ -232,6 +257,7 @@ final class ContainerBuilder
             parameters: $resolvedParams,
             tags: $this->tags,
             envResolver: $this->envResolver,
+            defaultLazy: $this->defaultLazy,
         );
     }
 
@@ -240,6 +266,9 @@ final class ContainerBuilder
      */
     public function compile(string $outputPath, string $className = 'CompiledContainer', string $namespace = ''): void
     {
+        $this->resolveDefaultLazy();
+        $this->detectUnsafeCircularDependencies();
+
         $compiler = new ContainerCompiler();
         $compiler->compile(
             definitions: $this->definitions,
@@ -266,6 +295,242 @@ final class ContainerBuilder
     public function getBindings(): array
     {
         return $this->bindings;
+    }
+
+    /**
+     * Detect circular dependencies that would be unsafe at runtime.
+     *
+     * Circular dependencies are only safe when **all** services in the cycle
+     * are lazy singletons — the cached proxy breaks the cycle before real
+     * instantiation begins.
+     *
+     * Unsafe cycles (will throw {@see CircularDependencyException}):
+     *  - Any **eager** service in the cycle — the Autowirer will encounter
+     *    the same class on the resolving stack and throw at runtime.
+     *  - Any **lazy transient** service — the proxy is not cached, so every
+     *    resolution creates a new proxy and re-enters instantiation,
+     *    leading to infinite recursion.
+     *
+     * Factory-based definitions are skipped because their dependencies
+     * cannot be determined statically.
+     *
+     * @throws CircularDependencyException when an unsafe cycle is found
+     */
+    private function detectUnsafeCircularDependencies(): void
+    {
+        $graph = $this->buildDependencyGraph();
+
+        /** @var array<string, bool> Nodes whose sub-tree is fully processed */
+        $done = [];
+        /** @var array<string, bool> Nodes currently on the DFS path */
+        $onPath = [];
+        /** @var list<string> Ordered DFS path for cycle extraction */
+        $path = [];
+
+        foreach (\array_keys($graph) as $node) {
+            if (!isset($done[$node])) {
+                $this->dfsDetectCycle($node, $graph, $onPath, $done, $path);
+            }
+        }
+    }
+
+    /**
+     * Build an adjacency list representing service dependencies.
+     *
+     * Analyses constructor parameters (respecting #[Inject] and #[Param])
+     * and explicit method-call arguments registered via {@see Definition::call()}.
+     *
+     * @return array<string, list<string>> service ID → list of dependency IDs
+     */
+    private function buildDependencyGraph(): array
+    {
+        $graph = [];
+
+        foreach ($this->definitions as $id => $definition) {
+            $className = $definition->getClassName() ?? $id;
+
+            // Factory definitions cannot be analysed statically
+            if ($definition->getFactory() !== null || !\class_exists($className)) {
+                $graph[$id] = [];
+                continue;
+            }
+
+            $deps = [];
+            $ref = new \ReflectionClass($className);
+
+            // --- Constructor parameters ---
+            $constructor = $ref->getConstructor();
+            if ($constructor !== null) {
+                foreach ($constructor->getParameters() as $param) {
+                    $depId = $this->resolveParameterDependency($param);
+                    if ($depId !== null) {
+                        $deps[] = $depId;
+                    }
+                }
+            }
+
+            // --- Method-call arguments (setter injection) ---
+            foreach ($definition->getMethodCalls() as $call) {
+                foreach ($call['arguments'] as $arg) {
+                    if (\is_string($arg)) {
+                        $resolved = $this->bindings[$arg] ?? $arg;
+                        if (isset($this->definitions[$resolved])) {
+                            $deps[] = $resolved;
+                        }
+                    }
+                }
+            }
+
+            $graph[$id] = \array_values(\array_unique($deps));
+        }
+
+        return $graph;
+    }
+
+    /**
+     * Resolve the service ID that a constructor parameter depends on.
+     *
+     * Returns `null` when the parameter is a scalar (#[Param]), has no
+     * type hint, or its type does not correspond to a registered service.
+     */
+    private function resolveParameterDependency(\ReflectionParameter $param): ?string
+    {
+        // #[Param] — scalar parameter, not a service dependency
+        if ($param->getAttributes(ParamAttr::class) !== []) {
+            return null;
+        }
+
+        // #[Inject] — explicit service override
+        $injectAttrs = $param->getAttributes(InjectAttr::class);
+        if ($injectAttrs !== []) {
+            /** @var InjectAttr $inject */
+            $inject = $injectAttrs[0]->newInstance();
+            $depId = $this->bindings[$inject->id] ?? $inject->id;
+
+            return isset($this->definitions[$depId]) ? $depId : null;
+        }
+
+        // Named type hint
+        $type = $param->getType();
+
+        if ($type instanceof \ReflectionNamedType && !$type->isBuiltin()) {
+            $depId = $this->bindings[$type->getName()] ?? $type->getName();
+
+            return isset($this->definitions[$depId]) ? $depId : null;
+        }
+
+        // Union type — take the first resolvable branch
+        if ($type instanceof \ReflectionUnionType) {
+            foreach ($type->getTypes() as $unionType) {
+                if ($unionType instanceof \ReflectionNamedType && !$unionType->isBuiltin()) {
+                    $depId = $this->bindings[$unionType->getName()] ?? $unionType->getName();
+                    if (isset($this->definitions[$depId])) {
+                        return $depId;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Depth-first search that throws on the first unsafe cycle.
+     *
+     * @param array<string, list<string>> $graph
+     * @param array<string, bool>         $onPath Nodes on the current DFS path
+     * @param array<string, bool>         $done   Fully processed nodes
+     * @param list<string>                $path   Current path for cycle extraction
+     *
+     * @throws CircularDependencyException
+     */
+    private function dfsDetectCycle(
+        string $node,
+        array $graph,
+        array &$onPath,
+        array &$done,
+        array &$path,
+    ): void {
+        $onPath[$node] = true;
+        $path[] = $node;
+
+        foreach ($graph[$node] as $dep) {
+            if (isset($done[$dep])) {
+                continue;
+            }
+
+            if (isset($onPath[$dep])) {
+                // Extract the cycle from the path
+                $cycleStart = \array_search($dep, $path, true);
+                \assert($cycleStart !== false);
+                $cycle = \array_slice($path, $cycleStart);
+                $cycle[] = $dep; // close the loop
+
+                $this->validateCycle($cycle);
+                continue;
+            }
+
+            $this->dfsDetectCycle($dep, $graph, $onPath, $done, $path);
+        }
+
+        \array_pop($path);
+        unset($onPath[$node]);
+        $done[$node] = true;
+    }
+
+    /**
+     * Check whether every service in the cycle is a lazy singleton.
+     *
+     * If any service is eager or transient, the cycle is unsafe and
+     * a {@see CircularDependencyException} is thrown with a detailed hint.
+     *
+     * @param list<string> $cycle Closed cycle path (last element = first element)
+     *
+     * @throws CircularDependencyException
+     */
+    private function validateCycle(array $cycle): void
+    {
+        $problems = [];
+        // Remove the closing duplicate for inspection
+        $serviceIds = \array_slice($cycle, 0, -1);
+
+        foreach ($serviceIds as $id) {
+            $def = $this->definitions[$id];
+            $reasons = [];
+
+            if (!$def->isLazy()) {
+                $reasons[] = 'not lazy';
+            }
+            if (!$def->isSingleton()) {
+                $reasons[] = 'not a singleton';
+            }
+
+            if ($reasons !== []) {
+                $short = \substr(\strrchr($id, '\\') ?: $id, 1) ?: $id;
+                $problems[] = \sprintf('%s (%s)', $short, \implode(', ', $reasons));
+            }
+        }
+
+        if ($problems !== []) {
+            throw new CircularDependencyException(
+                $cycle,
+                'All services in a circular dependency must be lazy singletons. Unsafe: '
+                . \implode('; ', $problems),
+            );
+        }
+    }
+
+    /**
+     * Apply the default lazy setting to all definitions
+     * that don't have an explicit lazy/eager flag.
+     */
+    private function resolveDefaultLazy(): void
+    {
+        foreach ($this->definitions as $definition) {
+            if (!$definition->hasExplicitLazy()) {
+                $definition->lazy($this->defaultLazy);
+            }
+        }
     }
 
     /**

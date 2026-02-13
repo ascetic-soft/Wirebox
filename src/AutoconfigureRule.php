@@ -56,6 +56,17 @@ final class AutoconfigureRule
     }
 
     /**
+     * Mark matching services as eager (not lazy).
+     * Use this to opt out of lazy instantiation for autoconfigured services.
+     */
+    public function eager(): self
+    {
+        $this->lazy = false;
+
+        return $this;
+    }
+
+    /**
      * Apply this rule's settings to a service definition.
      * Only overrides settings that were explicitly configured in the rule.
      */

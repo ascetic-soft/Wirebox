@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AsceticSoft\Wirebox;
 
+use AsceticSoft\Wirebox\Attribute\Eager as EagerAttr;
 use AsceticSoft\Wirebox\Attribute\Lazy as LazyAttr;
 use AsceticSoft\Wirebox\Attribute\Transient as TransientAttr;
 use AsceticSoft\Wirebox\Autowire\Autowirer;
@@ -36,6 +37,7 @@ class Container implements ContainerInterface
      * @param array<string, string> $bindings
      * @param array<string, mixed> $parameters Pre-resolved parameters
      * @param array<string, list<string>> $tags
+     * @param bool $defaultLazy Whether autowired classes (without definition) should be lazy by default
      */
     public function __construct(
         array $definitions = [],
@@ -43,6 +45,7 @@ class Container implements ContainerInterface
         array $parameters = [],
         array $tags = [],
         private readonly ?EnvResolver $envResolver = null,
+        private readonly bool $defaultLazy = false,
     ) {
         $this->definitions = $definitions;
         $this->bindings = $bindings;
@@ -252,13 +255,21 @@ class Container implements ContainerInterface
      * Auto-wire a class that has no explicit definition.
      * Reads class attributes to determine lifetime and laziness.
      *
+     * Laziness is determined by (in priority order):
+     * 1. #[Lazy] attribute → lazy
+     * 2. #[Eager] attribute → not lazy
+     * 3. Container's defaultLazy setting
+     *
      * @param class-string $className
      */
     private function autowireClass(string $className): object
     {
         $ref = new \ReflectionClass($className);
         $isTransient = $ref->getAttributes(TransientAttr::class) !== [];
-        $isLazy = $ref->getAttributes(LazyAttr::class) !== [];
+
+        $hasLazyAttr = $ref->getAttributes(LazyAttr::class) !== [];
+        $hasEagerAttr = $ref->getAttributes(EagerAttr::class) !== [];
+        $isLazy = $hasLazyAttr || (!$hasEagerAttr && $this->defaultLazy);
 
         if ($isLazy) {
             $proxy = $ref->newLazyProxy(fn (): object => $this->autowirer->resolve($className, $this));

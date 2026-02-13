@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace AsceticSoft\Wirebox\Tests\Unit;
 
 use AsceticSoft\Wirebox\AutoconfigureRule;
+use AsceticSoft\Wirebox\Container;
 use AsceticSoft\Wirebox\ContainerBuilder;
+use AsceticSoft\Wirebox\Exception\CircularDependencyException;
 use AsceticSoft\Wirebox\Exception\ContainerException;
+use AsceticSoft\Wirebox\Tests\Fixtures\CircularA;
+use AsceticSoft\Wirebox\Tests\Fixtures\CircularB;
 use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\AsScheduled;
 use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\CleanupTask;
 use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\CommandHandlerInterface;
@@ -646,5 +650,193 @@ final class ContainerBuilderTest extends TestCase
 
         self::assertCount(2, \iterator_to_array($container->getTagged('command.handler')));
         self::assertCount(2, \iterator_to_array($container->getTagged('event.listener')));
+    }
+
+    // --- Circular dependency detection tests ---
+
+    /**
+     * Two eager services with a circular dependency must be detected at build time.
+     */
+    public function testBuildDetectsEagerCircularDependency(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->defaultLazy(false);
+        $builder->register(CircularA::class)->eager();
+        $builder->register(CircularB::class)->eager();
+
+        $this->expectException(CircularDependencyException::class);
+        $this->expectExceptionMessageMatches('/Circular dependency detected/');
+        $this->expectExceptionMessageMatches('/not lazy/');
+
+        $builder->build();
+    }
+
+    /**
+     * Two lazy singletons with a circular dependency are safe — build must succeed.
+     */
+    public function testBuildAllowsLazySingletonCircularDependency(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->register(CircularA::class)->lazy()->singleton();
+        $builder->register(CircularB::class)->lazy()->singleton();
+
+        $container = $builder->build();
+
+        self::assertInstanceOf(Container::class, $container);
+    }
+
+    /**
+     * Two lazy transient services with a circular dependency are unsafe —
+     * proxy is not cached, leading to infinite recursion at runtime.
+     */
+    public function testBuildDetectsLazyTransientCircularDependency(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->register(CircularA::class)->lazy()->transient();
+        $builder->register(CircularB::class)->lazy()->transient();
+
+        $this->expectException(CircularDependencyException::class);
+        $this->expectExceptionMessageMatches('/not a singleton/');
+
+        $builder->build();
+    }
+
+    /**
+     * Mixed: one lazy singleton + one eager → unsafe cycle.
+     */
+    public function testBuildDetectsMixedLazyEagerCircularDependency(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->register(CircularA::class)->lazy()->singleton();
+        $builder->register(CircularB::class)->eager()->singleton();
+
+        $this->expectException(CircularDependencyException::class);
+        $this->expectExceptionMessageMatches('/CircularB.*not lazy/');
+
+        $builder->build();
+    }
+
+    /**
+     * Mixed: one lazy singleton + one lazy transient → unsafe cycle.
+     */
+    public function testBuildDetectsMixedSingletonTransientCircularDependency(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->register(CircularA::class)->lazy()->singleton();
+        $builder->register(CircularB::class)->lazy()->transient();
+
+        $this->expectException(CircularDependencyException::class);
+        $this->expectExceptionMessageMatches('/CircularB.*not a singleton/');
+
+        $builder->build();
+    }
+
+    /**
+     * The exception message must contain the full dependency chain.
+     */
+    public function testCircularDependencyExceptionContainsChain(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->register(CircularA::class)->eager();
+        $builder->register(CircularB::class)->eager();
+
+        try {
+            $builder->build();
+            self::fail('Expected CircularDependencyException');
+        } catch (CircularDependencyException $e) {
+            $message = $e->getMessage();
+            self::assertStringContainsString('CircularA', $message);
+            self::assertStringContainsString('CircularB', $message);
+            self::assertStringContainsString('->', $message);
+        }
+    }
+
+    /**
+     * Compile must also detect unsafe circular dependencies.
+     */
+    public function testCompileDetectsEagerCircularDependency(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->register(CircularA::class)->eager();
+        $builder->register(CircularB::class)->eager();
+
+        $this->expectException(CircularDependencyException::class);
+
+        $builder->compile($this->tmpDir . '/Compiled.php');
+    }
+
+    /**
+     * No circular dependency → no exception, even with complex graphs.
+     */
+    public function testBuildSucceedsWithoutCircularDependency(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->register(SimpleService::class)->eager();
+        $builder->register(ServiceWithDeps::class)->eager();
+
+        $container = $builder->build();
+
+        self::assertInstanceOf(Container::class, $container);
+    }
+
+    /**
+     * Factory-based definitions are skipped (dependencies are opaque).
+     */
+    public function testBuildSkipsFactoryDefinitionsInCycleDetection(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        // CircularA depends on CircularB via constructor,
+        // but CircularB is created by a factory — no static analysis possible
+        $builder->register(CircularA::class)->eager();
+        $factory = static fn (Container $c): CircularB => new CircularB(
+            /** @phpstan-ignore argument.type */
+            $c->get(CircularA::class),
+        );
+        $builder->register(CircularB::class, $factory)->eager();
+
+        // Should NOT throw — factory deps are opaque
+        $container = $builder->build();
+
+        self::assertInstanceOf(Container::class, $container);
+    }
+
+    /**
+     * Default-lazy builder makes circular singletons safe automatically.
+     */
+    public function testDefaultLazyMakesCircularSingletonsSafe(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->defaultLazy(true); // default, but explicit for clarity
+        $builder->register(CircularA::class); // no explicit lazy/eager → will inherit default
+        $builder->register(CircularB::class);
+
+        // resolveDefaultLazy() sets lazy=true, both are singletons → safe
+        $container = $builder->build();
+
+        self::assertInstanceOf(Container::class, $container);
+    }
+
+    /**
+     * Lazy singleton circular deps actually resolve correctly at runtime.
+     */
+    public function testLazySingletonCircularDepsResolveAtRuntime(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->register(CircularA::class)->lazy()->singleton();
+        $builder->register(CircularB::class)->lazy()->singleton();
+
+        $container = $builder->build();
+
+        $a = $container->get(CircularA::class);
+        self::assertInstanceOf(CircularA::class, $a);
+
+        // Accessing $a->b triggers initialization of A, which gets proxy B
+        self::assertInstanceOf(CircularB::class, $a->b);
+
+        // Accessing $a->b->a triggers initialization of B, which gets proxy A from cache
+        self::assertInstanceOf(CircularA::class, $a->b->a);
+
+        // The proxy identity is preserved: $a->b->a is the same proxy as $a
+        self::assertSame($a, $a->b->a);
     }
 }
