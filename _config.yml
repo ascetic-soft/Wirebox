@@ -7,7 +7,9 @@ baseurl: "/Wirebox"
 color_scheme: light
 
 aux_links:
-  "Wirebox on GitHub":
+  "Русский":
+    - "/Wirebox/ru/"
+  "GitHub":
     - "https://github.com/ascetic-soft/Wirebox"
   "Packagist":
     - "https://packagist.org/packages/ascetic-soft/wirebox"
