@@ -12,7 +12,7 @@ Lightweight PHP 8.4 DI Container with Autowiring, Attributes & Compiled Containe
 {: .fs-6 .fw-300 }
 
 [![CI](https://github.com/ascetic-soft/Wirebox/actions/workflows/ci.yml/badge.svg)](https://github.com/ascetic-soft/Wirebox/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/ascetic-soft/Wirebox/graph/badge.svg)](https://codecov.io/gh/ascetic-soft/Wirebox)
+[![codecov](https://codecov.io/gh/ascetic-soft/Wirebox/graph/badge.svg?token=yotFHWiMtP)](https://codecov.io/gh/ascetic-soft/Wirebox)
 [![PHPStan Level 9](https://img.shields.io/badge/phpstan-level%209-brightgreen)](https://phpstan.org/)
 [![Latest Stable Version](https://img.shields.io/packagist/v/ascetic-soft/wirebox)](https://packagist.org/packages/ascetic-soft/wirebox)
 [![PHP Version](https://img.shields.io/packagist/dependency-v/ascetic-soft/wirebox/php)](https://packagist.org/packages/ascetic-soft/wirebox)
