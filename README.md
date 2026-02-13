@@ -1,7 +1,7 @@
 # Wirebox
 
 [![CI](https://github.com/ascetic-soft/Wirebox/actions/workflows/ci.yml/badge.svg)](https://github.com/ascetic-soft/Wirebox/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/ascetic-soft/Wirebox/graph/badge.svg)](https://codecov.io/gh/ascetic-soft/Wirebox)
+[![codecov](https://codecov.io/gh/ascetic-soft/Wirebox/graph/badge.svg?token=yotFHWiMtP)](https://codecov.io/gh/ascetic-soft/Wirebox)
 [![PHPStan Level 9](https://img.shields.io/badge/phpstan-level%209-brightgreen)](https://phpstan.org/)
 [![Latest Stable Version](https://img.shields.io/packagist/v/ascetic-soft/wirebox)](https://packagist.org/packages/ascetic-soft/wirebox)
 [![Total Downloads](https://img.shields.io/packagist/dt/ascetic-soft/wirebox)](https://packagist.org/packages/ascetic-soft/wirebox)
