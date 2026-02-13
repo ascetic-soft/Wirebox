@@ -24,6 +24,7 @@ use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\PlainService;
 use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\QueryHandlerInterface;
 use AsceticSoft\Wirebox\Tests\FixturesAutoconfigure\UserCreatedListener;
 use AsceticSoft\Wirebox\Tests\Fixtures\DatabaseLogger;
+use AsceticSoft\Wirebox\Tests\Fixtures\EagerService;
 use AsceticSoft\Wirebox\Tests\Fixtures\ExcludedService;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\LazyService;
@@ -838,5 +839,49 @@ final class ContainerBuilderTest extends TestCase
 
         // The proxy identity is preserved: $a->b->a is the same proxy as $a
         self::assertSame($a, $a->b->a);
+    }
+
+    public function testScanReadsEagerAttribute(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../Fixtures');
+        $builder->bind(LoggerInterface::class, FileLogger::class);
+
+        $definitions = $builder->getDefinitions();
+
+        self::assertFalse($definitions[EagerService::class]->isLazy());
+    }
+
+    public function testProgrammaticAutoconfigurationAppliesEager(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->registerForAutoconfiguration(EventListenerInterface::class)
+            ->eager();
+
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        $definitions = $builder->getDefinitions();
+
+        self::assertFalse($definitions[UserCreatedListener::class]->isLazy());
+        self::assertFalse($definitions[OrderCreatedListener::class]->isLazy());
+    }
+
+    /**
+     * Circular dependency through setter injection is detected at build time.
+     *
+     * SimpleService (method call) -> ServiceWithDeps (constructor) -> SimpleService
+     */
+    public function testBuildDetectsCircularDependencyThroughMethodCall(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->register(SimpleService::class)
+            ->eager()
+            ->call('setDeps', [ServiceWithDeps::class]);
+        $builder->register(ServiceWithDeps::class)->eager();
+
+        $this->expectException(CircularDependencyException::class);
+        $this->expectExceptionMessageMatches('/Circular dependency detected/');
+
+        $builder->build();
     }
 }
