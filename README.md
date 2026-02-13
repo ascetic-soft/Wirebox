@@ -10,6 +10,8 @@
 
 Lightweight PHP 8.4 DI container with autowiring, directory scanning, PHP attributes, and dotenv support.
 
+📖 **[Full Documentation](https://ascetic-soft.github.io/Wirebox/)** | **[Документация на русском](https://ascetic-soft.github.io/Wirebox/ru/)**
+
 ## Features
 
 - **PSR-11** compatible (`Psr\Container\ContainerInterface`)
