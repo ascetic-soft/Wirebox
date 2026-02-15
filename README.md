@@ -112,6 +112,26 @@ $builder->scan(__DIR__ . '/Services');
 $builder->bind(PaymentInterface::class, StripePayment::class);
 ```
 
+Alternatively, if you don't need a specific binding but want to suppress the ambiguity error (e.g. the interface is resolved at runtime, or you only use tagged iteration), use `excludeFromAutoBinding()`:
+
+```php
+$builder->excludeFromAutoBinding(PaymentInterface::class);
+$builder->scan(__DIR__ . '/Services');
+// No error — PaymentInterface is excluded from the auto-binding check
+$container = $builder->build();
+```
+
+Multiple interfaces can be excluded at once:
+
+```php
+$builder->excludeFromAutoBinding(
+    PaymentInterface::class,
+    NotificationChannelInterface::class,
+);
+```
+
+> **Note:** Unlike `registerForAutoconfiguration()`, this does not apply any autoconfiguration rules (tags, lifetime, etc.) — it only suppresses the ambiguity error.
+
 ### Factory Registration
 
 Register a service with a custom factory closure:

@@ -40,6 +40,9 @@ final class ContainerBuilder
     /** @var list<string> Glob patterns to exclude from scanning */
     private array $excludePatterns = [];
 
+    /** @var array<class-string, true> Interfaces excluded from auto-binding */
+    private array $excludedFromAutoBinding = [];
+
     /** Whether services should be lazy by default (proxy returned, real instance created on first access) */
     private bool $defaultLazy = true;
 
@@ -64,8 +67,9 @@ final class ContainerBuilder
      * a ContainerException unless resolved with an explicit bind().
      *
      * Autoconfigured interfaces (via #[AutoconfigureTag] or
-     * registerForAutoconfiguration()) are excluded from the ambiguous
-     * binding check — they are expected to have multiple implementations.
+     * registerForAutoconfiguration()) and interfaces excluded via
+     * excludeFromAutoBinding() are excluded from the ambiguous binding
+     * check — they are expected to have multiple implementations.
      */
     public function scan(string $directory): self
     {
@@ -122,11 +126,11 @@ final class ContainerBuilder
             }
 
             // Auto-bind: if the class implements exactly one interface, bind it.
-            // Autoconfigured interfaces are skipped — they are expected
-            // to have multiple implementations (e.g. CQRS handlers).
+            // Autoconfigured and explicitly excluded interfaces are skipped —
+            // they are expected to have multiple implementations.
             $interfaces = $ref->getInterfaceNames();
             foreach ($interfaces as $interface) {
-                if ($this->isAutoconfiguredInterface($interface)) {
+                if ($this->isExcludedFromAutoBinding($interface)) {
                     continue;
                 }
                 // Skip built-in PHP interfaces (Throwable, Stringable, etc.)
@@ -160,6 +164,25 @@ final class ContainerBuilder
     public function exclude(string $pattern): self
     {
         $this->excludePatterns[] = $pattern;
+        return $this;
+    }
+
+    /**
+     * Exclude an interface from the ambiguous auto-binding check.
+     *
+     * Use this when multiple classes implement the same interface
+     * and you don't want the builder to treat it as an ambiguous binding.
+     * Unlike registerForAutoconfiguration(), this does not apply any
+     * autoconfiguration rules — it only suppresses the ambiguity error.
+     *
+     * @param class-string ...$classOrInterface
+     */
+    public function excludeFromAutoBinding(string ...$classOrInterface): self
+    {
+        foreach ($classOrInterface as $item) {
+            $this->excludedFromAutoBinding[$item] = true;
+        }
+
         return $this;
     }
 
@@ -467,7 +490,9 @@ final class ContainerBuilder
             if (isset($onPath[$dep])) {
                 // Extract the cycle from the path
                 $cycleStart = \array_search($dep, $path, true);
-                \assert($cycleStart !== false);
+                if ($cycleStart === false) {
+                    throw new \LogicException("Cycle start not found for dependency '$dep'.");
+                }
                 $cycle = \array_slice($path, $cycleStart);
                 $cycle[] = $dep; // close the loop
 
@@ -549,18 +574,23 @@ final class ContainerBuilder
     }
 
     /**
-     * Check whether an interface is autoconfigured (programmatically
-     * or via #[AutoconfigureTag]) and thus should be excluded from
-     * the ambiguous auto-binding check.
+     * Check whether an interface should be excluded from the ambiguous
+     * auto-binding check: explicitly excluded via excludeFromAutoBinding(),
+     * autoconfigured programmatically, or decorated with #[AutoconfigureTag].
      */
-    private function isAutoconfiguredInterface(string $interface): bool
+    private function isExcludedFromAutoBinding(string $interface): bool
     {
-        // 1. Programmatic: registered via registerForAutoconfiguration()
+        // 1. Explicitly excluded via excludeFromAutoBinding()
+        if (isset($this->excludedFromAutoBinding[$interface])) {
+            return true;
+        }
+
+        // 2. Programmatic: registered via registerForAutoconfiguration()
         if (isset($this->autoconfiguration[$interface])) {
             return true;
         }
 
-        // 2. Declarative: interface has #[AutoconfigureTag]
+        // 3. Declarative: interface has #[AutoconfigureTag]
         if (\interface_exists($interface)) {
             $ref = new \ReflectionClass($interface);
             if ($ref->getAttributes(AutoconfigureTag::class) !== []) {

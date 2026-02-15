@@ -654,6 +654,58 @@ final class ContainerBuilderTest extends TestCase
     }
 
     /**
+     * excludeFromAutoBinding() must suppress the ambiguous auto-binding
+     * error for the given interface, even when multiple implementations exist.
+     */
+    public function testExcludeFromAutoBindingSkipsAmbiguousCheck(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->excludeFromAutoBinding(PaymentInterface::class);
+        $builder->scan(__DIR__ . '/../FixturesAmbiguous');
+
+        // build() must succeed without explicit bind() for PaymentInterface
+        $container = $builder->build();
+
+        self::assertInstanceOf(Container::class, $container);
+
+        // PaymentInterface must NOT appear in bindings
+        $bindings = $builder->getBindings();
+        self::assertArrayNotHasKey(PaymentInterface::class, $bindings);
+    }
+
+    /**
+     * excludeFromAutoBinding() must return $this for fluent chaining.
+     */
+    public function testExcludeFromAutoBindingReturnsSelfForFluent(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+
+        $result = $builder->excludeFromAutoBinding(PaymentInterface::class);
+
+        self::assertSame($builder, $result);
+    }
+
+    /**
+     * excludeFromAutoBinding() must accept multiple interfaces at once.
+     */
+    public function testExcludeFromAutoBindingAcceptsMultipleInterfaces(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->excludeFromAutoBinding(
+            PaymentInterface::class,
+            EventListenerInterface::class,
+        );
+
+        $builder->scan(__DIR__ . '/../FixturesAmbiguous');
+        $builder->scan(__DIR__ . '/../FixturesAutoconfigure');
+
+        // build() must succeed — both interfaces are excluded
+        $container = $builder->build();
+
+        self::assertInstanceOf(Container::class, $container);
+    }
+
+    /**
      * Built-in PHP interfaces (Throwable, Stringable, etc.) must not
      * trigger the ambiguous auto-binding error, even when multiple
      * classes implementing them are scanned.

@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+## [1.2.2] - 2026-02-16
+
+### Added
+- `ContainerBuilder::excludeFromAutoBinding()` — explicitly exclude interfaces from the ambiguous auto-binding check without registering autoconfiguration rules. Accepts variadic arguments. Use this when multiple classes implement the same interface but you don't need autoconfiguration (tags, lifetime, etc.) — only the ambiguity suppression.
+
+### Changed
+- Internal method `isAutoconfiguredInterface()` renamed to `isExcludedFromAutoBinding()` to reflect its broader responsibility (now also checks the explicit exclusion list).
+- Replaced `\assert()` with an explicit `\LogicException` throw in cycle-detection logic for reliable error reporting in production.
+
 ## [1.2.1] - 2026-02-15
 
 ### Fixed
