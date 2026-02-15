@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.1] - 2026-02-15
+
+### Fixed
+- Built-in PHP interfaces (`Throwable`, `Stringable`, `Serializable`, `JsonSerializable`, etc.) no longer trigger false-positive ambiguous auto-binding errors when multiple classes implementing them are scanned. Uses `ReflectionClass::isInternal()` to skip all interfaces defined by PHP core and extensions.
+
+### Added
+- Test fixtures (`FixturesInternalInterfaces/`) and test `testBuiltInPhpInterfacesSkipAmbiguousBindingCheck` covering the fix.
+
 ## [1.2.0] - 2026-02-13
 
 ### Added

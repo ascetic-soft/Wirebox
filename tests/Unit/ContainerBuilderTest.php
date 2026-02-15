@@ -653,6 +653,26 @@ final class ContainerBuilderTest extends TestCase
         self::assertCount(2, \iterator_to_array($container->getTagged('event.listener')));
     }
 
+    /**
+     * Built-in PHP interfaces (Throwable, Stringable, etc.) must not
+     * trigger the ambiguous auto-binding error, even when multiple
+     * classes implementing them are scanned.
+     */
+    public function testBuiltInPhpInterfacesSkipAmbiguousBindingCheck(): void
+    {
+        $builder = new ContainerBuilder($this->tmpDir);
+        $builder->scan(__DIR__ . '/../FixturesInternalInterfaces');
+
+        // build() must succeed — Throwable and Stringable should be ignored
+        $container = $builder->build();
+
+        $bindings = $builder->getBindings();
+
+        // Built-in interfaces must NOT appear in bindings
+        self::assertArrayNotHasKey(\Throwable::class, $bindings);
+        self::assertArrayNotHasKey(\Stringable::class, $bindings);
+    }
+
     // --- Circular dependency detection tests ---
 
     /**

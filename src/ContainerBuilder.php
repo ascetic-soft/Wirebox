@@ -129,6 +129,11 @@ final class ContainerBuilder
                 if ($this->isAutoconfiguredInterface($interface)) {
                     continue;
                 }
+                // Skip built-in PHP interfaces (Throwable, Stringable, etc.)
+                // — they are never useful as DI bindings.
+                if (new \ReflectionClass($interface)->isInternal()) {
+                    continue;
+                }
                 // Only auto-bind if no explicit binding exists
                 if (isset($this->ambiguousBindings[$interface])) {
                     // Already marked as ambiguous — just add another implementation
