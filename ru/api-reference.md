@@ -81,6 +81,26 @@ $builder->bind(LoggerInterface::class, FileLogger::class);
 
 ---
 
+#### `excludeFromAutoBinding(string ...$interfaces): void`
+
+Явно исключает один или несколько интерфейсов из проверки на неоднозначную автопривязку без регистрации правил автоконфигурации. Используйте, когда несколько классов реализуют один интерфейс, но автоконфигурация (теги, время жизни и т.д.) не нужна — только подавление ошибки неоднозначности.
+
+```php
+$builder->excludeFromAutoBinding(
+    PaymentInterface::class,
+    NotificationChannelInterface::class,
+);
+```
+
+| Параметр | Тип | Описание |
+|:---------|:----|:---------|
+| `...$interfaces` | `string` | Один или несколько FQCN интерфейсов для исключения из автопривязки |
+
+{: .note }
+В отличие от `registerForAutoconfiguration()`, этот метод не применяет правил автоконфигурации — он только подавляет ошибку неоднозначности.
+
+---
+
 #### `register(string $id, ?Closure $factory = null): Definition`
 
 Регистрирует сервис по ID, опционально с фабричным замыканием. Возвращает `Definition` для fluent-настройки.

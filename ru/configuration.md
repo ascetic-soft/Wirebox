@@ -85,6 +85,29 @@ $builder->bind(PaymentInterface::class, StripePayment::class);
 {: .note }
 Интерфейсы с атрибутом `#[AutoconfigureTag]` исключаются из проверки на неоднозначность, так как множественные реализации для них ожидаемы. См. [Автоконфигурация]({{ '/ru/advanced.html' | relative_url }}#автоконфигурация).
 
+### Исключение интерфейсов из автопривязки
+
+Если вам не нужна конкретная привязка, но вы хотите подавить ошибку неоднозначности (например, интерфейс разрешается в рантайме или используется только через итерацию по тегам), используйте `excludeFromAutoBinding()`:
+
+```php
+$builder->excludeFromAutoBinding(PaymentInterface::class);
+$builder->scan(__DIR__ . '/Services');
+// Нет ошибки — PaymentInterface исключён из проверки автопривязки
+$container = $builder->build();
+```
+
+Можно исключить несколько интерфейсов за один вызов:
+
+```php
+$builder->excludeFromAutoBinding(
+    PaymentInterface::class,
+    NotificationChannelInterface::class,
+);
+```
+
+{: .note }
+В отличие от `registerForAutoconfiguration()`, этот метод не применяет никаких правил автоконфигурации (теги, время жизни и т.д.) — он только подавляет ошибку неоднозначности.
+
 ---
 
 ## Привязка интерфейсов

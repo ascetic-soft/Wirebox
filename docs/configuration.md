@@ -84,6 +84,29 @@ $builder->bind(PaymentInterface::class, StripePayment::class);
 {: .note }
 Interfaces marked with `#[AutoconfigureTag]` are excluded from the ambiguous binding check, since multiple implementations are expected. See [Autoconfiguration]({{ '/docs/advanced.html' | relative_url }}#autoconfiguration).
 
+### Excluding Interfaces from Auto-binding
+
+If you don't need a specific binding but want to suppress the ambiguity error (e.g., the interface is resolved at runtime, or you only use tagged iteration), use `excludeFromAutoBinding()`:
+
+```php
+$builder->excludeFromAutoBinding(PaymentInterface::class);
+$builder->scan(__DIR__ . '/Services');
+// No error — PaymentInterface is excluded from the auto-binding check
+$container = $builder->build();
+```
+
+Multiple interfaces can be excluded at once:
+
+```php
+$builder->excludeFromAutoBinding(
+    PaymentInterface::class,
+    NotificationChannelInterface::class,
+);
+```
+
+{: .note }
+Unlike `registerForAutoconfiguration()`, this does not apply any autoconfiguration rules (tags, lifetime, etc.) — it only suppresses the ambiguity error.
+
 ---
 
 ## Interface Binding

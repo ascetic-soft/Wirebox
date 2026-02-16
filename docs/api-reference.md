@@ -80,6 +80,26 @@ $builder->bind(LoggerInterface::class, FileLogger::class);
 
 ---
 
+#### `excludeFromAutoBinding(string ...$interfaces): void`
+
+Explicitly exclude one or more interfaces from the ambiguous auto-binding check without registering autoconfiguration rules. Use this when multiple classes implement the same interface but you don't need autoconfiguration (tags, lifetime, etc.) — only the ambiguity suppression.
+
+```php
+$builder->excludeFromAutoBinding(
+    PaymentInterface::class,
+    NotificationChannelInterface::class,
+);
+```
+
+| Parameter | Type | Description |
+|:----------|:-----|:------------|
+| `...$interfaces` | `string` | One or more interface FQCNs to exclude from auto-binding |
+
+{: .note }
+Unlike `registerForAutoconfiguration()`, this does not apply any autoconfiguration rules — it only suppresses the ambiguity error.
+
+---
+
 #### `register(string $id, ?Closure $factory = null): Definition`
 
 Register a service by ID, optionally with a factory closure. Returns a `Definition` for fluent configuration.

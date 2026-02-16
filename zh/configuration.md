@@ -85,6 +85,29 @@ $builder->bind(PaymentInterface::class, StripePayment::class);
 {: .note }
 带有 `#[AutoconfigureTag]` 属性的接口不受歧义绑定检查影响，因为多个实现是预期行为。参见[自动配置]({{ '/zh/advanced.html' | relative_url }}#自动配置)。
 
+### 从自动绑定中排除接口
+
+如果不需要特定绑定，但希望抑制歧义错误（例如接口在运行时解析，或仅通过标签迭代使用），可使用 `excludeFromAutoBinding()`：
+
+```php
+$builder->excludeFromAutoBinding(PaymentInterface::class);
+$builder->scan(__DIR__ . '/Services');
+// 无错误 — PaymentInterface 已从自动绑定检查中排除
+$container = $builder->build();
+```
+
+可以一次排除多个接口：
+
+```php
+$builder->excludeFromAutoBinding(
+    PaymentInterface::class,
+    NotificationChannelInterface::class,
+);
+```
+
+{: .note }
+与 `registerForAutoconfiguration()` 不同，此方法不应用任何自动配置规则（标签、生命周期等）——仅抑制歧义错误。
+
 ---
 
 ## 接口绑定

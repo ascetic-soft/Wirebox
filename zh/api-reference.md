@@ -81,6 +81,26 @@ $builder->bind(LoggerInterface::class, FileLogger::class);
 
 ---
 
+#### `excludeFromAutoBinding(string ...$interfaces): void`
+
+显式将一个或多个接口从歧义自动绑定检查中排除，无需注册自动配置规则。当多个类实现同一接口但不需要自动配置（标签、生命周期等）——仅需抑制歧义错误时使用。
+
+```php
+$builder->excludeFromAutoBinding(
+    PaymentInterface::class,
+    NotificationChannelInterface::class,
+);
+```
+
+| 参数 | 类型 | 说明 |
+|:-----|:-----|:-----|
+| `...$interfaces` | `string` | 一个或多个要从自动绑定中排除的接口 FQCN |
+
+{: .note }
+与 `registerForAutoconfiguration()` 不同，此方法不应用自动配置规则——仅抑制歧义错误。
+
+---
+
 #### `register(string $id, ?Closure $factory = null): Definition`
 
 按 ID 注册服务，可选工厂闭包。返回 `Definition` 用于 fluent 配置。
