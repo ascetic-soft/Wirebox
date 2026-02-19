@@ -25,8 +25,8 @@ final class CircularDependencyDetectorTest extends TestCase
     public function testDetectsEagerCircularDependency(): void
     {
         $definitions = [
-            CircularA::class => (new Definition(className: CircularA::class))->eager(),
-            CircularB::class => (new Definition(className: CircularB::class))->eager(),
+            CircularA::class => new Definition(className: CircularA::class)->eager(),
+            CircularB::class => new Definition(className: CircularB::class)->eager(),
         ];
 
         $this->expectException(CircularDependencyException::class);
@@ -39,8 +39,8 @@ final class CircularDependencyDetectorTest extends TestCase
     public function testAllowsLazySingletonCircularDependency(): void
     {
         $definitions = [
-            CircularA::class => (new Definition(className: CircularA::class))->lazy()->singleton(),
-            CircularB::class => (new Definition(className: CircularB::class))->lazy()->singleton(),
+            CircularA::class => new Definition(className: CircularA::class)->lazy()->singleton(),
+            CircularB::class => new Definition(className: CircularB::class)->lazy()->singleton(),
         ];
 
         $this->detector->detect($definitions, []);
@@ -50,8 +50,8 @@ final class CircularDependencyDetectorTest extends TestCase
     public function testDetectsLazyTransientCircularDependency(): void
     {
         $definitions = [
-            CircularA::class => (new Definition(className: CircularA::class))->lazy()->transient(),
-            CircularB::class => (new Definition(className: CircularB::class))->lazy()->transient(),
+            CircularA::class => new Definition(className: CircularA::class)->lazy()->transient(),
+            CircularB::class => new Definition(className: CircularB::class)->lazy()->transient(),
         ];
 
         $this->expectException(CircularDependencyException::class);
@@ -63,8 +63,8 @@ final class CircularDependencyDetectorTest extends TestCase
     public function testDetectsMixedLazyEagerCircularDependency(): void
     {
         $definitions = [
-            CircularA::class => (new Definition(className: CircularA::class))->lazy()->singleton(),
-            CircularB::class => (new Definition(className: CircularB::class))->eager()->singleton(),
+            CircularA::class => new Definition(className: CircularA::class)->lazy()->singleton(),
+            CircularB::class => new Definition(className: CircularB::class)->eager()->singleton(),
         ];
 
         $this->expectException(CircularDependencyException::class);
@@ -76,8 +76,8 @@ final class CircularDependencyDetectorTest extends TestCase
     public function testPassesWithoutCircularDependency(): void
     {
         $definitions = [
-            SimpleService::class => (new Definition(className: SimpleService::class))->eager(),
-            ServiceWithDeps::class => (new Definition(className: ServiceWithDeps::class))->eager(),
+            SimpleService::class => new Definition(className: SimpleService::class)->eager(),
+            ServiceWithDeps::class => new Definition(className: ServiceWithDeps::class)->eager(),
         ];
 
         $this->detector->detect($definitions, []);
@@ -90,7 +90,7 @@ final class CircularDependencyDetectorTest extends TestCase
             'factory_service' => new Definition(
                 factory: fn () => new SimpleService(),
             ),
-            SimpleService::class => (new Definition(className: SimpleService::class))->eager(),
+            SimpleService::class => new Definition(className: SimpleService::class)->eager(),
         ];
 
         $this->detector->detect($definitions, []);
@@ -100,10 +100,10 @@ final class CircularDependencyDetectorTest extends TestCase
     public function testDetectsCircularDependencyThroughMethodCall(): void
     {
         $definitions = [
-            SimpleService::class => (new Definition(className: SimpleService::class))
+            SimpleService::class => new Definition(className: SimpleService::class)
                 ->eager()
                 ->call('setDeps', [ServiceWithDeps::class]),
-            ServiceWithDeps::class => (new Definition(className: ServiceWithDeps::class))->eager(),
+            ServiceWithDeps::class => new Definition(className: ServiceWithDeps::class)->eager(),
         ];
 
         $this->expectException(CircularDependencyException::class);
