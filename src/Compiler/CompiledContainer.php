@@ -17,11 +17,8 @@ abstract class CompiledContainer implements WireboxContainerInterface
     /** @var array<string, object> Singleton cache */
     protected array $instances = [];
 
-    /** @var array<string, string> Service ID -> factory method name */
+    /** @var array<string, string> Service ID (including binding aliases) -> factory method name */
     protected array $methodMap = [];
-
-    /** @var array<string, string> Interface -> concrete class bindings */
-    protected array $bindings = [];
 
     /** @var array<string, mixed> Pre-resolved parameters */
     protected array $parameters = [];
@@ -42,13 +39,7 @@ abstract class CompiledContainer implements WireboxContainerInterface
             return $this->instances[$id];
         }
 
-        // Resolve binding
-        $resolvedId = $this->bindings[$id] ?? $id;
-        if ($resolvedId !== $id && isset($this->instances[$resolvedId])) {
-            return $this->instances[$resolvedId];
-        }
-
-        $method = $this->methodMap[$resolvedId] ?? $this->methodMap[$id] ?? null;
+        $method = $this->methodMap[$id] ?? null;
         if ($method === null) {
             throw new NotFoundException(\sprintf('Service "%s" is not registered in the compiled container.', $id));
         }
@@ -58,12 +49,7 @@ abstract class CompiledContainer implements WireboxContainerInterface
 
     public function has(string $id): bool
     {
-        if (isset($this->instances[$id]) || isset($this->methodMap[$id])) {
-            return true;
-        }
-
-        $resolvedId = $this->bindings[$id] ?? $id;
-        return isset($this->instances[$resolvedId]) || isset($this->methodMap[$resolvedId]);
+        return isset($this->instances[$id]) || isset($this->methodMap[$id]);
     }
 
     /**

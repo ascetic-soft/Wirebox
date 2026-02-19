@@ -36,7 +36,17 @@ final class EnvResolver
     {
         $this->ensureLoaded();
 
-        return $this->resolved[$name] ?? null;
+        if (isset($this->resolved[$name])) {
+            return $this->resolved[$name];
+        }
+
+        $sysValue = $this->getSystemEnv($name);
+        if ($sysValue !== null) {
+            $this->resolved[$name] = $sysValue;
+            return $sysValue;
+        }
+
+        return null;
     }
 
     /**

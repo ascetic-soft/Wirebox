@@ -15,6 +15,8 @@ use AsceticSoft\Wirebox\Definition;
  */
 final class ContainerCompiler
 {
+    private int $methodCounter = 0;
+
     /**
      * @param array<string, Definition> $definitions
      * @param array<string, string> $bindings
@@ -55,12 +57,17 @@ final class ContainerCompiler
             );
         }
 
+        foreach ($bindings as $abstract => $concrete) {
+            if (isset($methodMap[$concrete])) {
+                $methodMap[$abstract] = $methodMap[$concrete];
+            }
+        }
+
         $code = $this->generateClassCode(
             $className,
             $namespace,
             $methods,
             $methodMap,
-            $bindings,
             $parameters,
             $tags,
         );
@@ -75,8 +82,7 @@ final class ContainerCompiler
 
     private function generateMethodName(string $id): string
     {
-        // Convert FQCN to a valid method name
-        return 'get' . \str_replace(['\\', '.', '-'], '_', $id);
+        return '_' . $this->methodCounter++;
     }
 
     /**
@@ -222,7 +228,6 @@ final class ContainerCompiler
     /**
      * @param list<string> $methods
      * @param array<string, string> $methodMap
-     * @param array<string, string> $bindings
      * @param array<string, mixed> $parameters
      * @param array<string, list<string>> $tags
      */
@@ -231,7 +236,6 @@ final class ContainerCompiler
         string $namespace,
         array $methods,
         array $methodMap,
-        array $bindings,
         array $parameters,
         array $tags,
     ): string {
@@ -259,8 +263,6 @@ final class ContainerCompiler
         $lines[] = '        parent::__construct();';
         $lines[] = '';
         $lines[] = '        $this->methodMap = ' . $this->exportArray($methodMap, 2) . ';';
-        $lines[] = '';
-        $lines[] = '        $this->bindings = ' . $this->exportArray($bindings, 2) . ';';
         $lines[] = '';
         $lines[] = '        $this->parameters = ' . $this->exportArray($parameters, 2) . ';';
         $lines[] = '';

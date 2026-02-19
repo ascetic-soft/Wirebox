@@ -74,9 +74,9 @@ class Container implements WireboxContainerInterface
         // 2. Resolve binding (interface -> concrete)
         $resolvedId = $this->resolveBinding($id);
 
-        // Check singleton cache for the resolved ID
         if ($resolvedId !== $id && isset($this->instances[$resolvedId])) {
-            return $this->instances[$resolvedId];
+            $this->instances[$id] = $this->instances[$resolvedId];
+            return $this->instances[$id];
         }
 
         // 3. Get or create definition
@@ -196,9 +196,9 @@ class Container implements WireboxContainerInterface
 
         $instance = $this->createInstance($id, $definition);
 
-        // Cache singleton
         if ($definition->isSingleton()) {
             $this->instances[$id] = $instance;
+            unset($this->definitions[$id]);
         }
 
         return $instance;
@@ -216,9 +216,9 @@ class Container implements WireboxContainerInterface
 
         $proxy = $ref->newLazyProxy(fn (): object => $this->createInstance($id, $definition));
 
-        // Cache the proxy itself for singletons
         if ($definition->isSingleton()) {
             $this->instances[$id] = $proxy;
+            unset($this->definitions[$id]);
         }
 
         return $proxy;
@@ -264,11 +264,17 @@ class Container implements WireboxContainerInterface
      */
     private function autowireClass(string $className): object
     {
-        $ref = new \ReflectionClass($className);
-        $definition = $this->definitionFactory->createFromAttributes($ref);
+        $definition = $this->definitions[$className] ?? null;
 
-        if (!$definition->hasExplicitLazy()) {
-            $definition->lazy($this->defaultLazy);
+        if ($definition === null) {
+            $ref = new \ReflectionClass($className);
+            $definition = $this->definitionFactory->createFromAttributes($ref);
+
+            if (!$definition->hasExplicitLazy()) {
+                $definition->lazy($this->defaultLazy);
+            }
+
+            $this->definitions[$className] = $definition;
         }
 
         return $this->resolveDefinition($className, $definition);
