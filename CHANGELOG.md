@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-02-20
+
+### Added
+- `WireboxContainerInterface` — shared contract for both `Container` and `CompiledContainer`, extending PSR-11 with `getTagged()`, `getParameter()`, and `getParameters()`. Can be used as a type hint instead of concrete classes.
+- `DefinitionFactory` — centralised attribute-to-definition mapping, removes duplication between `scan()` and `autowireClass()`.
+- `CircularDependencyDetector` (moved to `Validator/` namespace) — dedicated class for DFS cycle detection.
+- `AutoBindingResolver` — dedicated class for interface auto-binding and ambiguity tracking.
+- 22 new unit tests for the extracted classes (`AutoBindingResolverTest`, `CircularDependencyDetectorTest`, `DefinitionFactoryTest`).
+- `EnvResolver::get()` now falls back to system environment variables (`$_ENV`, `$_SERVER`, `getenv()`) on demand, even for variables not listed in the `.env` file. Results are cached for subsequent calls.
+
+### Changed
+- **Architecture refactored to follow SOLID principles.** `ContainerBuilder` reduced from ~644 to ~340 lines by extracting `DefinitionFactory`, `CircularDependencyDetector`, `AutoBindingResolver`, and `WireboxContainerInterface`.
+- `Autowirer` now depends on `WireboxContainerInterface` instead of concrete `Container` (Dependency Inversion Principle).
+- All extracted dependencies are injectable via optional constructor parameters with sensible defaults.
+- **Runtime memory optimized:** `Definition` objects are freed from the container immediately after singleton instantiation, reducing the cache footprint.
+- **Auto-wired definitions cached:** transient auto-wired services no longer create `ReflectionClass` and `Definition` on every `get()` call.
+- **Binding alias caching:** singletons resolved via interface binding are now cached under both the interface and concrete keys, reducing subsequent lookups from two hash lookups to one.
+- **Compiled container optimized:** binding aliases are folded into `methodMap` at compile time, simplifying `get()` / `has()` to a single hash lookup and removing the `$bindings` property. Factory method names use short sequential identifiers (`_0`, `_1`, ...) instead of FQCN-derived names, reducing generated file size and opcache memory.
+
 ## [1.2.2] - 2026-02-16
 
 ### Added

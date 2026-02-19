@@ -526,19 +526,24 @@ $all  = $container->getParameters();
 
 ### Self-Resolution
 
-The container registers itself, so you can type-hint it:
+The container registers itself under three keys, so you can type-hint whichever you prefer:
 
 ```php
 use Psr\Container\ContainerInterface;
+use AsceticSoft\Wirebox\WireboxContainerInterface;
 
 class ServiceLocator
 {
     public function __construct(
-        private ContainerInterface $container,
+        // Any of the three works:
+        private ContainerInterface $psr,              // PSR-11
+        private WireboxContainerInterface $wirebox,   // Wirebox extended contract
     ) {
     }
 }
 ```
+
+`WireboxContainerInterface` extends PSR-11 with `getTagged()`, `getParameter()`, and `getParameters()`. Both `Container` and `CompiledContainer` implement it.
 
 ## Compiled Container
 
@@ -569,9 +574,10 @@ $service = $container->get(UserService::class);
 
 The compiled container:
 - Extends `AsceticSoft\Wirebox\Compiler\CompiledContainer`
-- Implements `Psr\Container\ContainerInterface`
+- Implements `WireboxContainerInterface` (and PSR-11 `ContainerInterface`)
 - Has a dedicated factory method for each service
-- Supports singleton caching, bindings, parameters, and tags
+- Supports singleton caching, interface bindings, parameters, and tags
+- Binding aliases are folded into the method map at compile time for single-lookup resolution
 - Does **not** support factory closures (they require runtime evaluation)
 
 ## Circular Dependencies
