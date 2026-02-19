@@ -6,9 +6,9 @@ namespace AsceticSoft\Wirebox\Autowire;
 
 use AsceticSoft\Wirebox\Attribute\Inject;
 use AsceticSoft\Wirebox\Attribute\Param;
-use AsceticSoft\Wirebox\Container;
 use AsceticSoft\Wirebox\Exception\AutowireException;
 use AsceticSoft\Wirebox\Exception\CircularDependencyException;
+use AsceticSoft\Wirebox\WireboxContainerInterface;
 
 /**
  * Resolves constructor dependencies via reflection.
@@ -28,7 +28,7 @@ final class Autowirer
      *
      * @param class-string $className
      */
-    public function resolve(string $className, Container $container): object
+    public function resolve(string $className, WireboxContainerInterface $container): object
     {
         // Circular dependency check
         if (\in_array($className, $this->resolvingStack, true)) {
@@ -61,7 +61,7 @@ final class Autowirer
      *
      * @return list<mixed>
      */
-    public function resolveMethodArguments(\ReflectionMethod $method, array $providedArgs, Container $container): array
+    public function resolveMethodArguments(\ReflectionMethod $method, array $providedArgs, WireboxContainerInterface $container): array
     {
         $params = $method->getParameters();
         $resolved = [];
@@ -87,7 +87,7 @@ final class Autowirer
     /**
      * @return list<mixed>
      */
-    private function resolveParameters(\ReflectionMethod $constructor, Container $container): array
+    private function resolveParameters(\ReflectionMethod $constructor, WireboxContainerInterface $container): array
     {
         $arguments = [];
 
@@ -98,7 +98,7 @@ final class Autowirer
         return $arguments;
     }
 
-    private function resolveParameter(\ReflectionParameter $param, Container $container): mixed
+    private function resolveParameter(\ReflectionParameter $param, WireboxContainerInterface $container): mixed
     {
         // 1. Check for #[Inject] attribute — explicit service override
         $injectAttr = $this->getAttribute($param, Inject::class);

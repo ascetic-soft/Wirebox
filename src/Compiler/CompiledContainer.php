@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace AsceticSoft\Wirebox\Compiler;
 
 use AsceticSoft\Wirebox\Exception\NotFoundException;
+use AsceticSoft\Wirebox\WireboxContainerInterface;
 use Psr\Container\ContainerInterface;
 
 /**
  * Base class for compiled (generated) containers.
  * No reflection at runtime — each service is a pre-generated factory method.
  */
-abstract class CompiledContainer implements ContainerInterface
+abstract class CompiledContainer implements WireboxContainerInterface
 {
     /** @var array<string, object> Singleton cache */
     protected array $instances = [];
@@ -31,6 +32,7 @@ abstract class CompiledContainer implements ContainerInterface
     public function __construct()
     {
         $this->instances[static::class] = $this;
+        $this->instances[WireboxContainerInterface::class] = $this;
         $this->instances[ContainerInterface::class] = $this;
     }
 

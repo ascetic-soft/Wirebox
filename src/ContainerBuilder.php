@@ -5,25 +5,15 @@ declare(strict_types=1);
 namespace AsceticSoft\Wirebox;
 
 use AsceticSoft\Wirebox\Attribute\AutoconfigureTag;
-use AsceticSoft\Wirebox\Attribute\Eager as EagerAttr;
-use AsceticSoft\Wirebox\Attribute\Exclude;
-use AsceticSoft\Wirebox\Attribute\Inject as InjectAttr;
-use AsceticSoft\Wirebox\Attribute\Lazy as LazyAttr;
-use AsceticSoft\Wirebox\Attribute\Param as ParamAttr;
-use AsceticSoft\Wirebox\Attribute\Tag as TagAttr;
-use AsceticSoft\Wirebox\Attribute\Transient as TransientAttr;
 use AsceticSoft\Wirebox\Compiler\ContainerCompiler;
 use AsceticSoft\Wirebox\Env\EnvResolver;
-use AsceticSoft\Wirebox\Exception\CircularDependencyException;
 use AsceticSoft\Wirebox\Scanner\ClassScanner;
+use AsceticSoft\Wirebox\Validator\CircularDependencyDetector;
 
 final class ContainerBuilder
 {
     /** @var array<string, Definition> */
     private array $definitions = [];
-
-    /** @var array<string, string> Interface/abstract -> concrete class */
-    private array $bindings = [];
 
     /** @var array<string, mixed> */
     private array $parameters = [];
@@ -31,17 +21,11 @@ final class ContainerBuilder
     /** @var array<string, list<string>> Tag -> list of service IDs */
     private array $tags = [];
 
-    /** @var array<string, list<string>> Interface -> implementations (tracked when ambiguous) */
-    private array $ambiguousBindings = [];
-
     /** @var array<class-string, AutoconfigureRule> Target class/interface/attribute -> rule */
     private array $autoconfiguration = [];
 
     /** @var list<string> Glob patterns to exclude from scanning */
     private array $excludePatterns = [];
-
-    /** @var array<class-string, true> Interfaces excluded from auto-binding */
-    private array $excludedFromAutoBinding = [];
 
     /** Whether services should be lazy by default (proxy returned, real instance created on first access) */
     private bool $defaultLazy = true;
@@ -50,11 +34,25 @@ final class ContainerBuilder
 
     private readonly EnvResolver $envResolver;
 
+    private readonly DefinitionFactory $definitionFactory;
+
+    private readonly CircularDependencyDetector $circularDependencyDetector;
+
+    private readonly AutoBindingResolver $autoBindingResolver;
+
     public function __construct(
         private readonly string $projectDir,
+        ?ClassScanner $scanner = null,
+        ?EnvResolver $envResolver = null,
+        ?DefinitionFactory $definitionFactory = null,
+        ?CircularDependencyDetector $circularDependencyDetector = null,
+        ?AutoBindingResolver $autoBindingResolver = null,
     ) {
-        $this->scanner = new ClassScanner();
-        $this->envResolver = new EnvResolver($this->projectDir);
+        $this->scanner = $scanner ?? new ClassScanner();
+        $this->envResolver = $envResolver ?? new EnvResolver($this->projectDir);
+        $this->definitionFactory = $definitionFactory ?? new DefinitionFactory();
+        $this->circularDependencyDetector = $circularDependencyDetector ?? new CircularDependencyDetector();
+        $this->autoBindingResolver = $autoBindingResolver ?? new AutoBindingResolver();
     }
 
     /**
@@ -81,39 +79,16 @@ final class ContainerBuilder
                 continue;
             }
 
-            // Check for #[Exclude] attribute
             if (!\class_exists($className)) {
                 continue;
             }
             $ref = new \ReflectionClass($className);
 
-            if ($ref->getAttributes(Exclude::class) !== []) {
+            if ($this->definitionFactory->isExcluded($ref)) {
                 continue;
             }
 
-            $definition = new Definition(className: $className);
-
-            // Read #[Transient] / #[Singleton] attributes
-            if ($ref->getAttributes(TransientAttr::class) !== []) {
-                $definition->transient();
-            } else {
-                $definition->singleton();
-            }
-
-            // Read #[Lazy] / #[Eager] attributes
-            if ($ref->getAttributes(LazyAttr::class) !== []) {
-                $definition->lazy();
-            } elseif ($ref->getAttributes(EagerAttr::class) !== []) {
-                $definition->eager();
-            }
-
-            // Read #[Tag] attributes
-            $tagAttrs = $ref->getAttributes(TagAttr::class);
-            foreach ($tagAttrs as $tagAttr) {
-                /** @var TagAttr $tag */
-                $tag = $tagAttr->newInstance();
-                $definition->tag($tag->name);
-            }
+            $definition = $this->definitionFactory->createFromAttributes($ref);
 
             // Apply autoconfiguration rules
             $this->applyAutoconfiguration($ref, $definition);
@@ -125,34 +100,12 @@ final class ContainerBuilder
                 $this->tags[$tagName][] = $className;
             }
 
-            // Auto-bind: if the class implements exactly one interface, bind it.
-            // Autoconfigured and explicitly excluded interfaces are skipped —
-            // they are expected to have multiple implementations.
-            $interfaces = $ref->getInterfaceNames();
-            foreach ($interfaces as $interface) {
-                if ($this->isExcludedFromAutoBinding($interface)) {
-                    continue;
-                }
-                // Skip built-in PHP interfaces (Throwable, Stringable, etc.)
-                // — they are never useful as DI bindings.
-                if (new \ReflectionClass($interface)->isInternal()) {
-                    continue;
-                }
-                // Only auto-bind if no explicit binding exists
-                if (isset($this->ambiguousBindings[$interface])) {
-                    // Already marked as ambiguous — just add another implementation
-                    $this->ambiguousBindings[$interface][] = $className;
-                } elseif (!isset($this->bindings[$interface])) {
-                    $this->bindings[$interface] = $className;
-                } elseif ($this->bindings[$interface] !== $className) {
-                    // Second implementation found — mark as ambiguous
-                    $this->ambiguousBindings[$interface] = [
-                        $this->bindings[$interface],
-                        $className,
-                    ];
-                    unset($this->bindings[$interface]);
-                }
-            }
+            // Auto-bind interfaces
+            $this->autoBindingResolver->registerImplementation(
+                $className,
+                $ref->getInterfaceNames(),
+                $this->autoconfiguration,
+            );
         }
 
         return $this;
@@ -179,9 +132,7 @@ final class ContainerBuilder
      */
     public function excludeFromAutoBinding(string ...$classOrInterface): self
     {
-        foreach ($classOrInterface as $item) {
-            $this->excludedFromAutoBinding[$item] = true;
-        }
+        $this->autoBindingResolver->exclude(...$classOrInterface);
 
         return $this;
     }
@@ -244,8 +195,7 @@ final class ContainerBuilder
      */
     public function bind(string $abstract, string $concrete): self
     {
-        $this->bindings[$abstract] = $concrete;
-        unset($this->ambiguousBindings[$abstract]);
+        $this->autoBindingResolver->bind($abstract, $concrete);
         return $this;
     }
 
@@ -264,24 +214,17 @@ final class ContainerBuilder
      */
     public function build(): Container
     {
-        if ($this->ambiguousBindings !== []) {
-            $interface = \array_key_first($this->ambiguousBindings);
-            $implementations = $this->ambiguousBindings[$interface];
+        $this->autoBindingResolver->validateNoAmbiguity();
 
-            throw new Exception\ContainerException(\sprintf(
-                'Ambiguous auto-binding for interface "%s": found implementations "%s". Use explicit bind() to resolve the ambiguity.',
-                $interface,
-                \implode('", "', $implementations),
-            ));
-        }
+        $bindings = $this->autoBindingResolver->getBindings();
 
         $this->resolveDefaultLazy();
-        $this->detectUnsafeCircularDependencies();
+        $this->circularDependencyDetector->detect($this->definitions, $bindings);
         $resolvedParams = $this->resolveParameters();
 
         return new Container(
             definitions: $this->definitions,
-            bindings: $this->bindings,
+            bindings: $bindings,
             parameters: $resolvedParams,
             tags: $this->tags,
             envResolver: $this->envResolver,
@@ -294,13 +237,17 @@ final class ContainerBuilder
      */
     public function compile(string $outputPath, string $className = 'CompiledContainer', string $namespace = ''): void
     {
+        $this->autoBindingResolver->validateNoAmbiguity();
+
+        $bindings = $this->autoBindingResolver->getBindings();
+
         $this->resolveDefaultLazy();
-        $this->detectUnsafeCircularDependencies();
+        $this->circularDependencyDetector->detect($this->definitions, $bindings);
 
         $compiler = new ContainerCompiler();
         $compiler->compile(
             definitions: $this->definitions,
-            bindings: $this->bindings,
+            bindings: $bindings,
             parameters: $this->resolveParameters(),
             tags: $this->tags,
             outputPath: $outputPath,
@@ -322,232 +269,7 @@ final class ContainerBuilder
      */
     public function getBindings(): array
     {
-        return $this->bindings;
-    }
-
-    /**
-     * Detect circular dependencies that would be unsafe at runtime.
-     *
-     * Circular dependencies are only safe when **all** services in the cycle
-     * are lazy singletons — the cached proxy breaks the cycle before real
-     * instantiation begins.
-     *
-     * Unsafe cycles (will throw {@see CircularDependencyException}):
-     *  - Any **eager** service in the cycle — the Autowirer will encounter
-     *    the same class on the resolving stack and throw at runtime.
-     *  - Any **lazy transient** service — the proxy is not cached, so every
-     *    resolution creates a new proxy and re-enters instantiation,
-     *    leading to infinite recursion.
-     *
-     * Factory-based definitions are skipped because their dependencies
-     * cannot be determined statically.
-     *
-     * @throws CircularDependencyException when an unsafe cycle is found
-     */
-    private function detectUnsafeCircularDependencies(): void
-    {
-        $graph = $this->buildDependencyGraph();
-
-        /** @var array<string, bool> Nodes whose sub-tree is fully processed */
-        $done = [];
-        /** @var array<string, bool> Nodes currently on the DFS path */
-        $onPath = [];
-        /** @var list<string> Ordered DFS path for cycle extraction */
-        $path = [];
-
-        foreach (\array_keys($graph) as $node) {
-            if (!isset($done[$node])) {
-                $this->dfsDetectCycle($node, $graph, $onPath, $done, $path);
-            }
-        }
-    }
-
-    /**
-     * Build an adjacency list representing service dependencies.
-     *
-     * Analyses constructor parameters (respecting #[Inject] and #[Param])
-     * and explicit method-call arguments registered via {@see Definition::call()}.
-     *
-     * @return array<string, list<string>> service ID → list of dependency IDs
-     */
-    private function buildDependencyGraph(): array
-    {
-        $graph = [];
-
-        foreach ($this->definitions as $id => $definition) {
-            $className = $definition->getClassName() ?? $id;
-
-            // Factory definitions cannot be analysed statically
-            if ($definition->getFactory() !== null || !\class_exists($className)) {
-                $graph[$id] = [];
-                continue;
-            }
-
-            $deps = [];
-            $ref = new \ReflectionClass($className);
-
-            // --- Constructor parameters ---
-            $constructor = $ref->getConstructor();
-            if ($constructor !== null) {
-                foreach ($constructor->getParameters() as $param) {
-                    $depId = $this->resolveParameterDependency($param);
-                    if ($depId !== null) {
-                        $deps[] = $depId;
-                    }
-                }
-            }
-
-            // --- Method-call arguments (setter injection) ---
-            foreach ($definition->getMethodCalls() as $call) {
-                foreach ($call['arguments'] as $arg) {
-                    if (\is_string($arg)) {
-                        $resolved = $this->bindings[$arg] ?? $arg;
-                        if (isset($this->definitions[$resolved])) {
-                            $deps[] = $resolved;
-                        }
-                    }
-                }
-            }
-
-            $graph[$id] = \array_values(\array_unique($deps));
-        }
-
-        return $graph;
-    }
-
-    /**
-     * Resolve the service ID that a constructor parameter depends on.
-     *
-     * Returns `null` when the parameter is a scalar (#[Param]), has no
-     * type hint, or its type does not correspond to a registered service.
-     */
-    private function resolveParameterDependency(\ReflectionParameter $param): ?string
-    {
-        // #[Param] — scalar parameter, not a service dependency
-        if ($param->getAttributes(ParamAttr::class) !== []) {
-            return null;
-        }
-
-        // #[Inject] — explicit service override
-        $injectAttrs = $param->getAttributes(InjectAttr::class);
-        if ($injectAttrs !== []) {
-            /** @var InjectAttr $inject */
-            $inject = $injectAttrs[0]->newInstance();
-            $depId = $this->bindings[$inject->id] ?? $inject->id;
-
-            return isset($this->definitions[$depId]) ? $depId : null;
-        }
-
-        // Named type hint
-        $type = $param->getType();
-
-        if ($type instanceof \ReflectionNamedType && !$type->isBuiltin()) {
-            $depId = $this->bindings[$type->getName()] ?? $type->getName();
-
-            return isset($this->definitions[$depId]) ? $depId : null;
-        }
-
-        // Union type — take the first resolvable branch
-        if ($type instanceof \ReflectionUnionType) {
-            foreach ($type->getTypes() as $unionType) {
-                if ($unionType instanceof \ReflectionNamedType && !$unionType->isBuiltin()) {
-                    $depId = $this->bindings[$unionType->getName()] ?? $unionType->getName();
-                    if (isset($this->definitions[$depId])) {
-                        return $depId;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Depth-first search that throws on the first unsafe cycle.
-     *
-     * @param array<string, list<string>> $graph
-     * @param array<string, bool>         $onPath Nodes on the current DFS path
-     * @param array<string, bool>         $done   Fully processed nodes
-     * @param list<string>                $path   Current path for cycle extraction
-     *
-     * @throws CircularDependencyException
-     */
-    private function dfsDetectCycle(
-        string $node,
-        array $graph,
-        array &$onPath,
-        array &$done,
-        array &$path,
-    ): void {
-        $onPath[$node] = true;
-        $path[] = $node;
-
-        foreach ($graph[$node] as $dep) {
-            if (isset($done[$dep])) {
-                continue;
-            }
-
-            if (isset($onPath[$dep])) {
-                // Extract the cycle from the path
-                $cycleStart = \array_search($dep, $path, true);
-                if ($cycleStart === false) {
-                    throw new \LogicException("Cycle start not found for dependency '$dep'.");
-                }
-                $cycle = \array_slice($path, $cycleStart);
-                $cycle[] = $dep; // close the loop
-
-                $this->validateCycle($cycle);
-                continue;
-            }
-
-            $this->dfsDetectCycle($dep, $graph, $onPath, $done, $path);
-        }
-
-        \array_pop($path);
-        unset($onPath[$node]);
-        $done[$node] = true;
-    }
-
-    /**
-     * Check whether every service in the cycle is a lazy singleton.
-     *
-     * If any service is eager or transient, the cycle is unsafe and
-     * a {@see CircularDependencyException} is thrown with a detailed hint.
-     *
-     * @param list<string> $cycle Closed cycle path (last element = first element)
-     *
-     * @throws CircularDependencyException
-     */
-    private function validateCycle(array $cycle): void
-    {
-        $problems = [];
-        // Remove the closing duplicate for inspection
-        $serviceIds = \array_slice($cycle, 0, -1);
-
-        foreach ($serviceIds as $id) {
-            $def = $this->definitions[$id];
-            $reasons = [];
-
-            if (!$def->isLazy()) {
-                $reasons[] = 'not lazy';
-            }
-            if (!$def->isSingleton()) {
-                $reasons[] = 'not a singleton';
-            }
-
-            if ($reasons !== []) {
-                $short = \substr(\strrchr($id, '\\') ?: $id, 1) ?: $id;
-                $problems[] = \sprintf('%s (%s)', $short, \implode(', ', $reasons));
-            }
-        }
-
-        if ($problems !== []) {
-            throw new CircularDependencyException(
-                $cycle,
-                'All services in a circular dependency must be lazy singletons. Unsafe: '
-                . \implode('; ', $problems),
-            );
-        }
+        return $this->autoBindingResolver->getBindings();
     }
 
     /**
@@ -571,34 +293,6 @@ final class ContainerBuilder
     private function resolveParameters(): array
     {
         return array_map(fn ($value) => $this->envResolver->resolveParameter($value), $this->parameters);
-    }
-
-    /**
-     * Check whether an interface should be excluded from the ambiguous
-     * auto-binding check: explicitly excluded via excludeFromAutoBinding(),
-     * autoconfigured programmatically, or decorated with #[AutoconfigureTag].
-     */
-    private function isExcludedFromAutoBinding(string $interface): bool
-    {
-        // 1. Explicitly excluded via excludeFromAutoBinding()
-        if (isset($this->excludedFromAutoBinding[$interface])) {
-            return true;
-        }
-
-        // 2. Programmatic: registered via registerForAutoconfiguration()
-        if (isset($this->autoconfiguration[$interface])) {
-            return true;
-        }
-
-        // 3. Declarative: interface has #[AutoconfigureTag]
-        if (\interface_exists($interface)) {
-            $ref = new \ReflectionClass($interface);
-            if ($ref->getAttributes(AutoconfigureTag::class) !== []) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**

@@ -4,16 +4,12 @@ declare(strict_types=1);
 
 namespace AsceticSoft\Wirebox;
 
-use AsceticSoft\Wirebox\Attribute\Eager as EagerAttr;
-use AsceticSoft\Wirebox\Attribute\Lazy as LazyAttr;
-use AsceticSoft\Wirebox\Attribute\Transient as TransientAttr;
 use AsceticSoft\Wirebox\Autowire\Autowirer;
 use AsceticSoft\Wirebox\Env\EnvResolver;
 use AsceticSoft\Wirebox\Exception\ContainerException;
 use AsceticSoft\Wirebox\Exception\NotFoundException;
-use Psr\Container\ContainerInterface;
 
-class Container implements ContainerInterface
+class Container implements WireboxContainerInterface
 {
     /** @var array<string, Definition> */
     private array $definitions;
@@ -32,6 +28,8 @@ class Container implements ContainerInterface
 
     private readonly Autowirer $autowirer;
 
+    private readonly DefinitionFactory $definitionFactory;
+
     /**
      * @param array<string, Definition> $definitions
      * @param array<string, string> $bindings
@@ -46,16 +44,20 @@ class Container implements ContainerInterface
         array $tags = [],
         private readonly ?EnvResolver $envResolver = null,
         private readonly bool $defaultLazy = false,
+        ?Autowirer $autowirer = null,
+        ?DefinitionFactory $definitionFactory = null,
     ) {
         $this->definitions = $definitions;
         $this->bindings = $bindings;
         $this->parameters = $parameters;
         $this->tags = $tags;
-        $this->autowirer = new Autowirer();
+        $this->autowirer = $autowirer ?? new Autowirer();
+        $this->definitionFactory = $definitionFactory ?? new DefinitionFactory();
 
         // Register the container itself
         $this->instances[self::class] = $this;
-        $this->instances[ContainerInterface::class] = $this;
+        $this->instances[WireboxContainerInterface::class] = $this;
+        $this->instances[\Psr\Container\ContainerInterface::class] = $this;
     }
 
     /**
@@ -253,40 +255,22 @@ class Container implements ContainerInterface
 
     /**
      * Auto-wire a class that has no explicit definition.
-     * Reads class attributes to determine lifetime and laziness.
      *
-     * Laziness is determined by (in priority order):
-     * 1. #[Lazy] attribute → lazy
-     * 2. #[Eager] attribute → not lazy
-     * 3. Container's defaultLazy setting
+     * Creates a Definition from class attributes via {@see DefinitionFactory},
+     * applies the container's default lazy setting if no explicit flag is set,
+     * and resolves it through the standard path.
      *
      * @param class-string $className
      */
     private function autowireClass(string $className): object
     {
         $ref = new \ReflectionClass($className);
-        $isTransient = $ref->getAttributes(TransientAttr::class) !== [];
+        $definition = $this->definitionFactory->createFromAttributes($ref);
 
-        $hasLazyAttr = $ref->getAttributes(LazyAttr::class) !== [];
-        $hasEagerAttr = $ref->getAttributes(EagerAttr::class) !== [];
-        $isLazy = $hasLazyAttr || (!$hasEagerAttr && $this->defaultLazy);
-
-        if ($isLazy) {
-            $proxy = $ref->newLazyProxy(fn (): object => $this->autowirer->resolve($className, $this));
-
-            if (!$isTransient) {
-                $this->instances[$className] = $proxy;
-            }
-
-            return $proxy;
+        if (!$definition->hasExplicitLazy()) {
+            $definition->lazy($this->defaultLazy);
         }
 
-        $instance = $this->autowirer->resolve($className, $this);
-
-        if (!$isTransient) {
-            $this->instances[$className] = $instance;
-        }
-
-        return $instance;
+        return $this->resolveDefinition($className, $definition);
     }
 }

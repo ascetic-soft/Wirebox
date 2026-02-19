@@ -8,6 +8,7 @@ use AsceticSoft\Wirebox\Compiler\CompiledContainer;
 use AsceticSoft\Wirebox\Compiler\ContainerCompiler;
 use AsceticSoft\Wirebox\Definition;
 use AsceticSoft\Wirebox\Exception\NotFoundException;
+use AsceticSoft\Wirebox\WireboxContainerInterface;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\LoggerInterface;
 use AsceticSoft\Wirebox\Tests\Fixtures\ServiceWithDefault;
@@ -294,7 +295,30 @@ final class CompilerTest extends TestCase
         $container = new $uniqueClass();
 
         self::assertSame($container, $container->get(ContainerInterface::class));
+        self::assertSame($container, $container->get(WireboxContainerInterface::class));
         self::assertSame($container, $container->get($uniqueClass));
+    }
+
+    public function testCompiledContainerImplementsWireboxContainerInterface(): void
+    {
+        $compiler = new ContainerCompiler();
+        $outputPath = $this->tmpDir . '/ImplementsInterface.php';
+        $uniqueClass = 'ImplementsInterface_' . \uniqid();
+
+        $compiler->compile(
+            definitions: [],
+            bindings: [],
+            parameters: [],
+            tags: [],
+            outputPath: $outputPath,
+            className: $uniqueClass,
+        );
+
+        require_once $outputPath;
+        $container = new $uniqueClass();
+
+        self::assertInstanceOf(WireboxContainerInterface::class, $container);
+        self::assertInstanceOf(ContainerInterface::class, $container);
     }
 
     public function testCompiledContainerGetParametersReturnsAll(): void

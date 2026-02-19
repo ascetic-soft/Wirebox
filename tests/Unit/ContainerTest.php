@@ -9,6 +9,7 @@ use AsceticSoft\Wirebox\Definition;
 use AsceticSoft\Wirebox\Env\EnvResolver;
 use AsceticSoft\Wirebox\Exception\ContainerException;
 use AsceticSoft\Wirebox\Exception\NotFoundException;
+use AsceticSoft\Wirebox\WireboxContainerInterface;
 use AsceticSoft\Wirebox\Tests\Fixtures\DatabaseLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\FileLogger;
 use AsceticSoft\Wirebox\Tests\Fixtures\LazyService;
@@ -156,6 +157,15 @@ final class ContainerTest extends TestCase
 
         self::assertSame($container, $container->get(Container::class));
         self::assertSame($container, $container->get(ContainerInterface::class));
+        self::assertSame($container, $container->get(WireboxContainerInterface::class));
+    }
+
+    public function testContainerImplementsWireboxContainerInterface(): void
+    {
+        $container = new Container();
+
+        self::assertInstanceOf(WireboxContainerInterface::class, $container);
+        self::assertInstanceOf(ContainerInterface::class, $container);
     }
 
     public function testGetTagged(): void
